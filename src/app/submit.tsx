@@ -1,88 +1,133 @@
+import { useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useDataSettings } from '@/context/data-settings';
+import { normalizePrivateLanUrl } from '@/lib/public-reports';
 
-import { useState } from 'react';
-import {
-    Alert,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text, TextInput,
-    View,
-} from 'react-native';
+const CATEGORIES = [
+  ['flooding', 'Flooding'], ['roadworks', 'Roadworks'],
+  ['fallen_tree', 'Fallen tree'], ['pothole', 'Pothole'],
+  ['road_obstruction', 'Road obstruction'], ['storm_damage', 'Storm damage'], ['other', 'Other']
+] as const;
+const IMPACTS = [
+  ['unknown', 'Unknown'], ['caution', 'Caution'],
+  ['partial_obstruction', 'Partial obstruction'], ['suspected_closure', 'Suspected closure']
+] as const;
+const PLACES = [
+  { label: 'Example junction A', longitude: 101.4318, latitude: 3.0876 },
+  { label: 'Example junction B', longitude: 101.4392, latitude: 3.0891 },
+  { label: 'Example junction C', longitude: 101.4257, latitude: 3.0833 }
+] as const;
+type Category = typeof CATEGORIES[number][0];
+type Impact = typeof IMPACTS[number][0];
 
 export default function SubmitScreen() {
+  const { mode, backendUrl } = useDataSettings();
+  const [category, setCategory] = useState<Category>('flooding');
+  const [impact, setImpact] = useState<Impact>('unknown');
+  const [place, setPlace] = useState(0);
   const [description, setDescription] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const inFlight = useRef(false);
+  const [outcome, setOutcome] = useState('');
 
-  function submitDemo() {
-    const length = description.trim().length;
-    if (length < 8 || description.length > 400) {
-      Alert.alert('Invalid description', 'Enter between 8 and 400 characters.');
+  async function submitReport() {
+    if (inFlight.current) return;
+    if (description.trim().length < 8 || description.length > 400) {
+      Alert.alert('Description needed', 'Enter 8–400 characters describing a fictional scenario.');
       return;
     }
-
-    Alert.alert(
-      'Mock Demo Only',
-      'This is a form preview. Nothing was sent to management or saved.'
-    );
+    if (mode === 'mock') {
+      Alert.alert('Mock Demo only', 'Form preview complete. Nothing was sent to management or stored.');
+      setOutcome('Mock Demo preview only — no report was saved.');
+      return;
+    }
+    const url = normalizePrivateLanUrl(backendUrl);
+    if (!url) {
+      setOutcome('Set your trusted PC address in About before sending a fictional report.');
+      return;
+    }
+    inFlight.current = true;
+    setSubmitting(true);
+    setOutcome('');
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      const location = PLACES[place];
+      const response = await fetch(url + '/api/v2/hazards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category, impact, description: description.trim(),
+          coordinates: [location.longitude, location.latitude]
+        }),
+        signal: controller.signal
+      });
+      const body: unknown = await response.json();
+      if (!response.ok) {
+        let message = 'Backend could not accept the demo report.';
+        if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') message = body.error;
+        setOutcome(message);
+        return;
+      }
+      if (!body || typeof body !== 'object' || !('report' in body) || typeof body.report !== 'object' || !body.report || !('id' in body.report) || typeof body.report.id !== 'string') {
+        setOutcome('Backend responded unexpectedly. Check Reports before trying again to avoid duplicate submissions.');
+        return;
+      }
+      setOutcome('Fictional report sent to management. Reference: ' + body.report.id + '. Open Reports and refresh to see its review state.');
+      setDescription('');
+    } catch (error) {
+      setOutcome(error instanceof Error && error.name === 'AbortError'
+        ? 'Request timed out. It may have reached the backend; check Reports before resending.'
+        : 'Could not confirm delivery. Check Reports before trying again to avoid duplicates.');
+    } finally {
+      clearTimeout(timeout);
+      inFlight.current = false;
+      setSubmitting(false);
+    }
   }
-
   return (
-    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>MOCK DEMO MODE</Text>
-      <Text style={styles.title}>Submit a Report</Text>
-      <Text style={styles.subtitle}>
-        Practice reporting a fictional township issue.
-      </Text>
-
-      <View style={styles.card}>
-        <Text style={styles.label}>Description</Text>
-        <TextInput
-          style={styles.input}
-          multiline
-          placeholder="Describe a made-up township issue..."
-          placeholderTextColor="#94a3b8"
-          value={description}
-          onChangeText={setDescription}
-          maxLength={400}
-          textAlignVertical="top"
-        />
-        <Text style={styles.counter}>{description.length}/400</Text>
-
-        <Text style={styles.note}>
-          Category, suspected impact, location selection and private
-          sample-photo upload will be added in later milestones.
-        </Text>
-
-        <Pressable style={styles.button} onPress={submitDemo}>
-          <Text style={styles.buttonText}>Preview Submission</Text>
-        </Pressable>
+    <ScrollView style={s.page} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · NOTHING SENT' : 'LOCAL BACKEND · FICTIONAL INTAKE'}</Text>
+      <Text style={s.title}>Submit a Report</Text>
+      <Text style={s.subtitle}>Practice reporting a made-up township condition. Not for actual hazards or emergencies.</Text>
+      <View style={s.card}>
+        <Text style={s.label}>Fictional category</Text>
+        <View style={s.choices}>{CATEGORIES.map(([value, label]) => <Pressable key={value} onPress={() => setCategory(value)} accessibilityRole="button" accessibilityState={{ selected: category === value }} style={[s.chip, category === value && s.chipActive]}><Text style={[s.chipText, category === value && s.chipTextActive]}>{label}</Text></Pressable>)}</View>
+        <Text style={s.label}>Suspected impact (not verified)</Text>
+        <View style={s.choices}>{IMPACTS.map(([value, label]) => <Pressable key={value} onPress={() => setImpact(value)} accessibilityRole="button" accessibilityState={{ selected: impact === value }} style={[s.chip, impact === value && s.chipActive]}><Text style={[s.chipText, impact === value && s.chipTextActive]}>{label}</Text></Pressable>)}</View>
+        <Text style={s.label}>Example location</Text>
+        <Text style={s.small}>Preset demonstration points only. Tap-to-place map selection comes in M3. No GPS is requested.</Text>
+        {PLACES.map((item, i) => <Pressable key={item.label} style={[s.location, place === i && s.locationActive]} onPress={() => setPlace(i)} accessibilityRole="radio" accessibilityState={{ checked: place === i }}><Text style={s.locationText}>{place === i ? '◉' : '○'} {item.label}</Text></Pressable>)}
+        <Text style={s.label}>Fictional description</Text>
+        <TextInput style={s.input} value={description} onChangeText={setDescription} multiline maxLength={400} textAlignVertical="top" placeholder="Describe an invented road or drainage issue…" placeholderTextColor="#94a3b8" />
+        <Text style={s.small}>{description.length}/400 characters (minimum 8 non-space characters)</Text>
+        <Pressable accessibilityRole="button" disabled={submitting} style={[s.button, submitting && s.disabled]} onPress={() => void submitReport()}>{submitting ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>{mode === 'mock' ? 'Preview fictional submission' : 'Send fictional report to management'}</Text>}</Pressable>
+        {outcome ? <Text accessibilityRole="text" style={s.outcome}>{outcome}</Text> : null}
       </View>
-
-      <Text style={styles.note}>
-        This prototype does not accept real emergencies, live road reports,
-        or identifying personal information.
-      </Text>
+      <Text style={s.small}>Local Backend sends fictional data to your PC only. Reports remain unverified until a human operator reviews them. Nothing automatically closes or alters roads. Photos will be added in M4.</Text>
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: '#f8fafc' },
-  content: { padding: 22, paddingTop: 24, gap: 16 },
+  content: { padding: 22, paddingTop: 24, paddingBottom: 60, gap: 16 },
   eyebrow: { fontSize: 11, fontWeight: '800', color: '#0f766e' },
-  title: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
-  subtitle: { color: '#64748b' },
-  card: { backgroundColor: '#fff', padding: 20, borderRadius: 18, gap: 14 },
-  label: { fontWeight: '700', fontSize: 15, color: '#0f172a' },
-  input: {
-    height: 130, padding: 14, borderWidth: 1,
-    borderColor: '#cbd5e1', borderRadius: 12,
-    fontSize: 14, color: '#0f172a',
-  },
-  counter: { textAlign: 'right', fontSize: 12, color: '#64748b' },
-  note: { fontSize: 12, color: '#64748b', lineHeight: 20 },
-  button: {
-    backgroundColor: '#0f766e', padding: 16,
-    alignItems: 'center', borderRadius: 13,
-  },
-  buttonText: { color: '#fff', fontWeight: '800' },
+  title: { fontSize: 28, color: '#0f172a', fontWeight: '800' },
+  subtitle: { fontSize: 14, color: '#64748b', lineHeight: 21 },
+  card: { backgroundColor: '#fff', padding: 18, gap: 13, borderRadius: 18 },
+  label: { color: '#0f172a', fontSize: 15, fontWeight: '800' },
+  small: { color: '#64748b', fontSize: 12, lineHeight: 19 },
+  choices: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  chip: { borderRadius: 12, borderWidth: 1, borderColor: '#cbd5e1', paddingVertical: 10, paddingHorizontal: 11 },
+  chipActive: { backgroundColor: '#0f766e', borderColor: '#0f766e' },
+  chipText: { fontSize: 12, color: '#334155', fontWeight: '700' },
+  chipTextActive: { color: '#fff' },
+  location: { padding: 12, borderRadius: 12, backgroundColor: '#f1f5f9' },
+  locationActive: { backgroundColor: '#ccfbf1' },
+  locationText: { color: '#0f172a', fontSize: 13, fontWeight: '600' },
+  input: { minHeight: 120, borderRadius: 12, padding: 13, borderWidth: 1, borderColor: '#cbd5e1', color: '#0f172a' },
+  button: { borderRadius: 12, backgroundColor: '#0f766e', padding: 16, alignItems: 'center' },
+  disabled: { opacity: 0.6 },
+  buttonText: { color: '#fff', fontWeight: '800', textAlign: 'center' },
+  outcome: { color: '#0f766e', fontSize: 13, lineHeight: 21 }
 });
