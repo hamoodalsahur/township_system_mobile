@@ -1,62 +1,86 @@
-
-import { useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from 'expo-router';
 import MapView, { Marker } from 'react-native-maps';
+import { useDataSettings } from '@/context/data-settings';
+import { loadPublicReports, type PublicReport } from '@/lib/public-reports';
 
-const DEMO_LOCATIONS = [
-  {
-    id: 'A',
-    title: 'Fictional flooding report',
-    description: 'Example flooding scenario. Not a real incident.',
-    latitude: 3.0876,
-    longitude: 101.4318,
-  },
-  {
-    id: 'B',
-    title: 'Fictional fallen tree report',
-    description: 'Example fallen-tree scenario. Not a real incident.',
-    latitude: 3.0891,
-    longitude: 101.4392,
-  },
-  {
-    id: 'C',
-    title: 'Fictional pothole report',
-    description: 'Example road-surface scenario. Not a real incident.',
-    latitude: 3.0833,
-    longitude: 101.4257,
-  },
+type MapReport = {
+  id: string;
+  category: string;
+  description: string;
+  impact: string;
+  reviewState: string;
+  latitude: number;
+  longitude: number;
+  hasApprovedPhoto: boolean;
+};
+
+const DEMO_LOCATIONS: MapReport[] = [
+  { id: 'MOCK-A', category: 'flooding', description: 'Made-up flooding scenario. Not a real incident.', impact: 'caution', reviewState: 'unverified', latitude: 3.0876, longitude: 101.4318, hasApprovedPhoto: false },
+  { id: 'MOCK-B', category: 'fallen_tree', description: 'Invented fallen-tree scenario. Not a real incident.', impact: 'partial_obstruction', reviewState: 'corroborated', latitude: 3.0891, longitude: 101.4392, hasApprovedPhoto: false },
+  { id: 'MOCK-C', category: 'pothole', description: 'Sample road-surface issue. Not a real incident.', impact: 'caution', reviewState: 'unverified', latitude: 3.0833, longitude: 101.4257, hasApprovedPhoto: false }
 ];
 
-export default function MapScreen() {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+const readable = (value: string) =>
+  value.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
 
-  const selected = DEMO_LOCATIONS.find(
-    (item) => item.id === selectedId
-  );
+function validCoordinate(r: PublicReport): boolean {
+  return Number.isFinite(r.latitude) && Number.isFinite(r.longitude) &&
+    r.latitude >= 3.06 && r.latitude <= 3.11 &&
+    r.longitude >= 101.40 && r.longitude <= 101.47;
+}
+
+export default function MapScreen() {
+  const { mode, backendUrl } = useDataSettings();
+  const [backendReports, setBackendReports] = useState<MapReport[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const refresh = useCallback(() => setRefreshVersion(v => v + 1), []);
+
+  useFocusEffect(useCallback(() => {
+    if (mode === 'local') refresh();
+  }, [mode, backendUrl, refresh]));
+
+  useEffect(() => {
+    setSelectedId(null);
+    if (mode === 'mock') {
+      setLoading(false);
+      setError('');
+      setBackendReports([]);
+      return;
+    }
+    let active = true;
+    setLoading(true);
+    setError('');
+    setBackendReports([]);
+    loadPublicReports(backendUrl)
+      .then(reports => {
+        if (!active) return;
+        setBackendReports(reports.filter(validCoordinate));
+        setLoading(false);
+      })
+      .catch(reason => {
+        if (!active) return;
+        setError(reason instanceof Error ? reason.message : 'Could not load the fictional map reports.');
+        setLoading(false);
+      });
+    return () => { active = false; };
+  }, [mode, backendUrl, refreshVersion]);
+
+  const reports = mode === 'mock' ? DEMO_LOCATIONS : !loading && !error ? backendReports : [];
+  const selected = reports.find(report => report.id === selectedId);
 
   return (
-    <ScrollView
-      style={styles.page}
-      contentContainerStyle={styles.content}
-    >
-      <Text style={styles.eyebrow}>
-        TOWNSHIP INTELLIGENCE
-      </Text>
-
-      <Text style={styles.title}>Township Map</Text>
-
-      <Text style={styles.subtitle}>
-        Bandar Bukit Raja · Fictional demonstration
-      </Text>
-
-      <View style={styles.mapContainer}>
+    <ScrollView style={s.page} contentContainerStyle={s.content}>
+      <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · SAMPLE MARKERS' : 'LOCAL BACKEND · FICTIONAL REPORTS'}</Text>
+      <Text style={s.title}>Township Map</Text>
+      <Text style={s.subtitle}>Bandar Bukit Raja · Academic prototype</Text>
+      <View style={s.mapFrame}>
         <MapView
-          style={styles.map}
+          style={s.map}
           initialRegion={{
             latitude: 3.087,
             longitude: 101.433,
@@ -66,135 +90,66 @@ export default function MapScreen() {
           showsUserLocation={false}
           showsMyLocationButton={false}
         >
-          {DEMO_LOCATIONS.map((item) => (
+          {reports.map(report => (
             <Marker
-              key={item.id}
-              coordinate={{
-                latitude: item.latitude,
-                longitude: item.longitude,
-              }}
-              title={item.title}
-              description={item.description}
-              pinColor="#0f766e"
-              onPress={() => setSelectedId(item.id)}
+              key={report.id}
+              coordinate={{ latitude: report.latitude, longitude: report.longitude }}
+              pinColor={report.reviewState === 'corroborated' ? '#0f766e' : '#f59e0b'}
+              title={readable(report.category) + ' · Fictional'}
+              description={readable(report.impact) + ' · Not road guidance'}
+              onPress={() => setSelectedId(report.id)}
             />
           ))}
         </MapView>
-
-        <View style={styles.mapBadge}>
-          <Text style={styles.mapBadgeText}>
-            DEMO MARKERS ONLY
-          </Text>
+        <View style={s.mapBadge} pointerEvents="none">
+          <Text style={s.mapBadgeText}>FICTIONAL REPORTS ONLY</Text>
         </View>
       </View>
 
-      {selected ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            {selected.title}
-          </Text>
-          <Text style={styles.body}>
-            {selected.description}
-          </Text>
-          <Text style={styles.details}>
-            Example location {selected.id}
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>
-            Explore the map
-          </Text>
-          <Text style={styles.body}>
-            Drag to explore Bandar Bukit Raja, pinch
-            to zoom, or tap a demonstration marker
-            to view its details.
-          </Text>
-        </View>
-      )}
+      {mode === 'local' && <Pressable accessibilityRole="button" onPress={refresh} style={s.refresh}><Text style={s.refreshText}>Refresh map reports</Text></Pressable>}
+      {loading && <View style={s.card}><ActivityIndicator color="#0f766e"/><Text style={s.body}>Loading fictional reports from your PC…</Text></View>}
+      {error ? <View style={s.card}><Text style={s.errorTitle}>The map reports could not load</Text><Text style={s.body}>{error}</Text><Text style={s.body}>No old markers are shown as current. Check About for your PC connection.</Text><Pressable style={s.refresh} onPress={refresh}><Text style={s.refreshText}>Retry</Text></Pressable></View> : null}
+      {mode === 'local' && !loading && !error && reports.length === 0 ? (
+        <View style={s.card}><Text style={s.cardTitle}>No map reports yet</Text><Text style={s.body}>This backend has no fictional reports with coordinates in the demonstration area.</Text></View>
+      ) : null}
 
-      <Text style={styles.notice}>
-        Academic prototype only. Markers are invented
-        examples, not real incidents, confirmed road
-        closures, emergency information or navigation advice.
-      </Text>
+      {selected && !loading && !error ? (
+        <View style={s.card}>
+          <Text style={s.cardTitle}>{readable(selected.category)} · Fictional report</Text>
+          <Text style={s.body}>{selected.description}</Text>
+          <Text style={s.detail}>Suspected impact: {readable(selected.impact)}</Text>
+          <Text style={s.detail}>Review: {selected.reviewState === 'corroborated' ? 'Human-corroborated demonstration report' : 'Not human-corroborated'}</Text>
+          <Text style={s.detail}>Reference: {selected.id}</Text>
+          <Text style={s.detail}>{selected.hasApprovedPhoto ? 'Approved demonstration photo available in the backend (not shown here).' : 'No approved demonstration photo shown.'}</Text>
+        </View>
+      ) : !loading && !error && reports.length > 0 ? (
+        <View style={s.card}>
+          <Text style={s.cardTitle}>Explore the map</Text>
+          <Text style={s.body}>Pan or pinch to zoom, then tap one of the {reports.length} fictional report markers to read more.</Text>
+        </View>
+      ) : null}
+
+      <Text style={s.notice}>Academic prototype only. No real incidents, reliable live road status, verified closures, emergency reporting, or navigation advice. The original blue road overlay will be added after iPhone performance testing.</Text>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  content: {
-    padding: 20,
-    paddingTop: 24,
-    paddingBottom: 45,
-    gap: 15,
-  },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0f766e',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#64748b',
-  },
-  mapContainer: {
-    height: 440,
-    borderRadius: 20,
-    overflow: 'hidden',
-    backgroundColor: '#dbeafe',
-  },
-  map: {
-    width: '100%',
-    height: '100%',
-  },
-  mapBadge: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-  mapBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#0f766e',
-  },
-  card: {
-    padding: 20,
-    backgroundColor: '#ffffff',
-    borderRadius: 18,
-    gap: 10,
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  body: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: '#475569',
-  },
-  details: {
-    fontSize: 12,
-    color: '#0f766e',
-    fontWeight: '700',
-  },
-  notice: {
-    fontSize: 12,
-    lineHeight: 19,
-    color: '#64748b',
-  },
+const s = StyleSheet.create({
+  page: { flex: 1, backgroundColor: '#f8fafc' },
+  content: { padding: 20, paddingTop: 24, paddingBottom: 45, gap: 15 },
+  eyebrow: { fontSize: 11, fontWeight: '800', color: '#0f766e' },
+  title: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
+  subtitle: { fontSize: 14, color: '#64748b' },
+  mapFrame: { height: 440, borderRadius: 20, overflow: 'hidden', backgroundColor: '#dbeafe' },
+  map: { width: '100%', height: '100%' },
+  mapBadge: { position: 'absolute', top: 12, left: 12, backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  mapBadgeText: { fontSize: 10, fontWeight: '800', color: '#0f766e' },
+  card: { padding: 20, backgroundColor: '#fff', borderRadius: 18, gap: 10 },
+  cardTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
+  body: { fontSize: 14, lineHeight: 22, color: '#475569' },
+  detail: { fontSize: 12, color: '#0f766e', lineHeight: 19 },
+  notice: { fontSize: 12, lineHeight: 19, color: '#64748b' },
+  refresh: { padding: 13, backgroundColor: '#0f766e', borderRadius: 12, alignItems: 'center', alignSelf: 'flex-start' },
+  refreshText: { color: '#fff', fontWeight: '800' },
+  errorTitle: { color: '#9a3412', fontSize: 15, fontWeight: '800' }
 });
