@@ -1,98 +1,56 @@
-import * as Device from 'expo-device';
-import { Platform, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { AnimatedIcon } from '@/components/animated-icon';
-import { HintRow } from '@/components/hint-row';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { WebBadge } from '@/components/web-badge';
-import { BottomTabInset, MaxContentWidth, Spacing } from '@/constants/theme';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 
-function getDevMenuHint() {
-  if (Platform.OS === 'web') {
-    return <ThemedText type="small">use browser devtools</ThemedText>;
-  }
-  if (Device.isDevice) {
-    return (
-      <ThemedText type="small">
-        shake device or press <ThemedText type="code">m</ThemedText> in terminal
-      </ThemedText>
-    );
-  }
-  const shortcut = Platform.OS === 'android' ? 'cmd+m (or ctrl+m)' : 'cmd+d';
+export default function MapScreen() {
   return (
-    <ThemedText type="small">
-      press <ThemedText type="code">{shortcut}</ThemedText>
-    </ThemedText>
-  );
-}
+    <ScrollView style={styles.page} contentContainerStyle={styles.content}>
+      <Text style={styles.eyebrow}>TOWNSHIP INTELLIGENCE</Text>
+      <Text style={styles.title}>Explore Your Township</Text>
+      <Text style={styles.subtitle}>
+        Bandar Bukit Raja • Fictional demonstration
+      </Text>
 
-export default function HomeScreen() {
-  return (
-    <ThemedView style={styles.container}>
-      <SafeAreaView style={styles.safeArea}>
-        <ThemedView style={styles.heroSection}>
-          <AnimatedIcon />
-          <ThemedText type="title" style={styles.title}>
-            Welcome to&nbsp;Expo
-          </ThemedText>
-        </ThemedView>
+      <View style={styles.map}>
+        <Text style={styles.mapIcon}>🗺️</Text>
+        <Text style={styles.mapTitle}>Geographic Map</Text>
+        <Text style={styles.mapText}>
+          Our interactive Bandar Bukit Raja map will appear here in Mobile M3.
+        </Text>
+      </View>
 
-        <ThemedText type="code" style={styles.code}>
-          get started
-        </ThemedText>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Road Reference Legend</Text>
+        <Text style={{ color: '#2563eb' }}>━━━━ Major roads</Text>
+        <Text style={{ color: '#60a5fa' }}>━━━━ Local roads</Text>
+        <Text style={{ color: '#93c5fd' }}>━━━━ Service roads</Text>
+        <Text style={{ color: '#bfdbfe' }}>━━━━ Other roads</Text>
+      </View>
 
-        <ThemedView type="backgroundElement" style={styles.stepContainer}>
-          <HintRow
-            title="Try editing"
-            hint={<ThemedText type="code">src/app/index.tsx</ThemedText>}
-          />
-          <HintRow title="Dev tools" hint={getDevMenuHint()} />
-          <HintRow
-            title="Fresh start"
-            hint={<ThemedText type="code">npm run reset-project</ThemedText>}
-          />
-        </ThemedView>
-
-        {Platform.OS === 'web' && <WebBadge />}
-      </SafeAreaView>
-    </ThemedView>
+      <Text style={styles.notice}>
+        Academic prototype only. No live road conditions, verified closures,
+        emergency reporting, or navigation advice.
+      </Text>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: 'center',
-    flexDirection: 'row',
+  page: { flex: 1, backgroundColor: '#f8fafc' },
+  content: { padding: 22, paddingTop: 24, gap: 16 },
+  eyebrow: { fontSize: 11, fontWeight: '800', color: '#0f766e' },
+  title: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
+  subtitle: { color: '#64748b', fontSize: 14 },
+  map: {
+    height: 300, backgroundColor: '#dbeafe', borderRadius: 20,
+    alignItems: 'center', justifyContent: 'center', padding: 25,
   },
-  safeArea: {
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    alignItems: 'center',
-    gap: Spacing.three,
-    paddingBottom: BottomTabInset + Spacing.three,
-    maxWidth: MaxContentWidth,
+  mapIcon: { fontSize: 55, marginBottom: 12 },
+  mapTitle: { fontSize: 20, fontWeight: '800', color: '#1e3a8a' },
+  mapText: { textAlign: 'center', color: '#475569', marginTop: 10 },
+  card: {
+    padding: 20, backgroundColor: '#fff',
+    borderRadius: 18, gap: 10,
   },
-  heroSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    paddingHorizontal: Spacing.four,
-    gap: Spacing.four,
-  },
-  title: {
-    textAlign: 'center',
-  },
-  code: {
-    textTransform: 'uppercase',
-  },
-  stepContainer: {
-    gap: Spacing.three,
-    alignSelf: 'stretch',
-    paddingHorizontal: Spacing.three,
-    paddingVertical: Spacing.four,
-    borderRadius: Spacing.four,
-  },
+  cardTitle: { fontSize: 17, fontWeight: '700', marginBottom: 5 },
+  notice: { fontSize: 12, color: '#64748b', lineHeight: 19 },
 });
