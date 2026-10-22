@@ -1,219 +1,76 @@
-
 import { useState } from 'react';
-import {
-    ActivityIndicator,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useDataSettings } from '@/context/data-settings';
+import { loadPublicReports, normalizePrivateLanUrl } from '@/lib/public-reports';
 
 export default function AboutScreen() {
-  const [serverUrl, setServerUrl] = useState('');
+  const { mode, setMode, backendUrl, setBackendUrl } = useDataSettings();
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState('');
 
   async function testConnection() {
-    const url = serverUrl.trim().replace(/\/+$/, '');
-
-    if (
-      !/^http:\/\/(localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):\d{2,5}$/.test(url)
-    ) {
-      setResult('Enter your PC private-network URL, for example http://192.168.1.23:3000');
-      return;
-    }
-
     setChecking(true);
-    setResult('Connecting...');
-
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-
+    setResult('');
     try {
-      const response = await fetch(
-        `${url}/api/v2/hazards`,
-        { signal: controller.signal, cache: 'no-store' }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Backend returned HTTP ${response.status}`);
-      }
-
-      const data: unknown = await response.json();
-
-      if (
-        typeof data !== 'object' ||
-        data === null ||
-        !('reports' in data) ||
-        !Array.isArray(data.reports)
-      ) {
-        throw new Error('Unexpected backend response');
-      }
-
-      setResult(
-        `Connected successfully! ${data.reports.length} fictional reports available.`
-      );
+      const count = (await loadPublicReports(backendUrl)).length;
+      setResult('Connected to the development backend. ' + count + ' fictional reports available.');
     } catch (error) {
-      setResult(
-        error instanceof Error
-          ? `Connection failed: ${error.message}`
-          : 'Connection failed. Check your PC IP and Wi-Fi.'
-      );
-    } finally {
-      clearTimeout(timeout);
-      setChecking(false);
-    }
+      setResult(error instanceof Error ? error.message : 'Could not reach the backend.');
+    } finally { setChecking(false); }
   }
 
   return (
-    <ScrollView
-      style={styles.page}
-      contentContainerStyle={styles.content}
-      keyboardShouldPersistTaps="handled"
-    >
-      <Text style={styles.eyebrow}>TOWNSHIP INTELLIGENCE</Text>
-      <Text style={styles.title}>About & Connection</Text>
-
-      <View style={styles.card}>
-        <Text style={styles.heading}>Resident Mobile Prototype</Text>
-        <Text style={styles.body}>
-          Fictional Township Road & Hazard Intelligence System
-          demonstration for Bandar Bukit Raja.
-        </Text>
+    <ScrollView style={s.page} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+      <Text style={s.eyebrow}>TOWNSHIP INTELLIGENCE</Text>
+      <Text style={s.title}>About & Connection</Text>
+      <View style={s.card}>
+        <Text style={s.heading}>Resident mobile prototype</Text>
+        <Text style={s.body}>An academic demonstration for Bandar Bukit Raja. All reports are fictional, not verified conditions or travel guidance.</Text>
       </View>
-
-      <View style={styles.card}>
-        <Text style={styles.heading}>Current Mode: Mock Demo</Text>
-        <Text style={styles.body}>
-          The app currently uses bundled fictional reports.
-          Testing the backend connection does not switch the
-          Reports or Submit screens to live backend data.
-        </Text>
+      <View style={s.card}>
+        <Text style={s.heading}>Report data source</Text>
+        <View style={s.switchRow}>
+          <Pressable accessibilityRole="button" accessibilityState={{ selected: mode === 'mock' }} onPress={() => setMode('mock')} style={[s.choice, mode === 'mock' && s.active]}><Text style={[s.choiceText, mode === 'mock' && s.activeText]}>Mock Demo</Text></Pressable>
+          <Pressable accessibilityRole="button" accessibilityState={{ selected: mode === 'local' }} onPress={() => setMode('local')} style={[s.choice, mode === 'local' && s.active]}><Text style={[s.choiceText, mode === 'local' && s.activeText]}>Local Backend</Text></Pressable>
+        </View>
+        <Text style={s.body}>{mode === 'mock' ? 'Bundled sample reports. Nothing is sent to management.' : 'Reads fictional reports from your Windows PC. Submission still stays in preview mode.'}</Text>
+        <Text style={s.hint}>Mode and address are kept in memory and reset when the application restarts.</Text>
       </View>
-
-      <View style={styles.card}>
-        <Text style={styles.heading}>Backend Connection Test</Text>
-
-        <Text style={styles.body}>
-          Enter the private-network address of your Windows PC.
-          This only reads fictional reports.
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          value={serverUrl}
-          onChangeText={setServerUrl}
-          placeholder="http://192.168.1.23:3000"
-          placeholderTextColor="#94a3b8"
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="url"
-        />
-
-        <Pressable
-          style={[styles.button, checking && styles.disabled]}
-          onPress={testConnection}
-          disabled={checking}
-        >
-          {checking
-            ? <ActivityIndicator color="#ffffff" />
-            : <Text style={styles.buttonText}>Test Connection</Text>
-          }
+      <View style={s.card}>
+        <Text style={s.heading}>Check your PC connection</Text>
+        <Text style={s.body}>Connect both devices to trusted private Wi-Fi. Use the PC IPv4 address; never use localhost on your iPhone.</Text>
+        <TextInput style={s.input} accessibilityLabel="PC backend address" value={backendUrl} onChangeText={setBackendUrl} placeholder="http://192.168.1.23:3000" placeholderTextColor="#94a3b8" autoCapitalize="none" autoCorrect={false} keyboardType="url" />
+        <Pressable accessibilityRole="button" disabled={checking || !normalizePrivateLanUrl(backendUrl)} onPress={() => void testConnection()} style={[s.button, (checking || !normalizePrivateLanUrl(backendUrl)) && s.disabled]}>
+          {checking ? <ActivityIndicator color="#fff"/> : <Text style={s.buttonText}>Test connection</Text>}
         </Pressable>
-
-        {result ? (
-          <Text accessibilityRole="text" style={styles.result}>
-            {result}
-          </Text>
-        ) : null}
+        {result ? <Text accessibilityRole="text" style={s.result}>{result}</Text> : null}
       </View>
-
-      <View style={styles.card}>
-        <Text style={styles.heading}>Safety & Privacy</Text>
-        <Text style={styles.body}>
-          This is not an emergency service, live road monitor,
-          navigation application, or source of verified closures.
-          Do not submit actual incidents or personal information.
-          Existing management actions and private photos remain
-          restricted to the management application.
-        </Text>
+      <View style={s.card}>
+        <Text style={s.heading}>Safety & privacy</Text>
+        <Text style={s.body}>Fictional demonstration only. Not an emergency service, navigation app or live road monitor. Do not submit real emergencies or personal information. Operator controls, private photos and the operator key remain on the management website.</Text>
       </View>
-
-      <Text style={styles.footer}>
-        Mobile M1 · Local development only
-      </Text>
+      <Text style={s.hint}>Mobile M1 · Private-network development only</Text>
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  page: {
-    flex: 1,
-    backgroundColor: '#f8fafc',
-  },
-  content: {
-    padding: 22,
-    paddingTop: 24,
-    gap: 16,
-    paddingBottom: 40,
-  },
-  eyebrow: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#0f766e',
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  card: {
-    backgroundColor: '#ffffff',
-    padding: 20,
-    borderRadius: 18,
-    gap: 12,
-  },
-  heading: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  body: {
-    fontSize: 14,
-    color: '#475569',
-    lineHeight: 23,
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#cbd5e1',
-    borderRadius: 12,
-    padding: 14,
-    color: '#0f172a',
-    fontSize: 14,
-  },
-  button: {
-    backgroundColor: '#0f766e',
-    borderRadius: 12,
-    padding: 15,
-    alignItems: 'center',
-  },
-  disabled: {
-    opacity: 0.6,
-  },
-  buttonText: {
-    color: '#ffffff',
-    fontWeight: '800',
-  },
-  result: {
-    fontSize: 13,
-    lineHeight: 20,
-    color: '#0f766e',
-  },
-  footer: {
-    color: '#94a3b8',
-    textAlign: 'center',
-    fontSize: 12,
-  },
+const s = StyleSheet.create({
+  page: { flex: 1, backgroundColor: '#f8fafc' },
+  content: { padding: 22, paddingTop: 24, paddingBottom: 48, gap: 16 },
+  eyebrow: { fontSize: 11, color: '#0f766e', fontWeight: '800' },
+  title: { fontSize: 28, color: '#0f172a', fontWeight: '800' },
+  card: { backgroundColor: '#fff', borderRadius: 18, padding: 19, gap: 12 },
+  heading: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
+  body: { fontSize: 14, lineHeight: 22, color: '#475569' },
+  hint: { fontSize: 12, lineHeight: 19, color: '#64748b' },
+  switchRow: { flexDirection: 'row', gap: 8 },
+  choice: { flex: 1, alignItems: 'center', paddingVertical: 13, borderRadius: 12, backgroundColor: '#e2e8f0' },
+  active: { backgroundColor: '#0f766e' },
+  choiceText: { fontWeight: '700', color: '#334155' },
+  activeText: { color: '#fff' },
+  input: { padding: 13, borderRadius: 12, borderColor: '#cbd5e1', borderWidth: 1, color: '#0f172a' },
+  button: { padding: 15, borderRadius: 12, backgroundColor: '#0f766e', alignItems: 'center' },
+  disabled: { opacity: 0.45 },
+  buttonText: { color: '#fff', fontWeight: '800' },
+  result: { color: '#0f766e', fontSize: 13, lineHeight: 19 }
 });
