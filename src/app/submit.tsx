@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useDataSettings } from '@/context/data-settings';
 import { normalizePrivateLanUrl } from '@/lib/public-reports';
 import { useDemoLocation, validDemoLocation } from '@/context/demo-location';
@@ -23,6 +24,7 @@ type Impact = typeof IMPACTS[number][0];
 
 export default function SubmitScreen() {
   const { mode, backendUrl } = useDataSettings();
+  const router = useRouter();
   const { chosenLocation, chooseLocation } = useDemoLocation();
   const [category, setCategory] = useState<Category>('flooding');
   const [impact, setImpact] = useState<Impact>('unknown');
@@ -35,6 +37,7 @@ export default function SubmitScreen() {
   const [submitting, setSubmitting] = useState(false);
   const inFlight = useRef(false);
   const [outcome, setOutcome] = useState('');
+  const [successfulReportId, setSuccessfulReportId] = useState<string | null>(null);
 
   async function submitReport() {
     if (inFlight.current) return;
@@ -55,6 +58,7 @@ export default function SubmitScreen() {
     inFlight.current = true;
     setSubmitting(true);
     setOutcome('');
+    setSuccessfulReportId(null);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
     try {
@@ -84,11 +88,7 @@ export default function SubmitScreen() {
         return;
       }
       setOutcome('Fictional report sent to management. Reference: ' + body.report.id + '. Open Reports and refresh to see its review state.');
-      Alert.alert(
-        'Report submitted successfully',
-        'Your fictional report was received by management.\n\nReference: ' + body.report.id + '\n\nIt is awaiting human review. You can check its status in Reports.',
-        [{ text: 'OK' }]
-      );
+      setSuccessfulReportId(body.report.id);
       setDescription('');
     } catch (error) {
       setOutcome(error instanceof Error && error.name === 'AbortError'
@@ -124,6 +124,28 @@ export default function SubmitScreen() {
         {outcome ? <Text accessibilityRole="text" style={s.outcome}>{outcome}</Text> : null}
       </View>
       <Text style={s.small}>Local Backend sends fictional data to your PC only. Reports remain unverified until a human operator reviews them. Nothing automatically closes or alters roads. Photos will be added in M4.</Text>
+      <Modal visible={successfulReportId !== null} transparent animationType="fade" onRequestClose={() => setSuccessfulReportId(null)}>
+        <View style={s.modalBackdrop}>
+          <View style={s.modalCard} accessibilityRole="alert">
+            <Text style={s.modalIcon}>✓</Text>
+            <Text style={s.modalTitle}>Report submitted successfully!</Text>
+            <Text style={s.modalBody}>Your fictional report has been received by management and is awaiting human review.</Text>
+            <Text selectable style={s.modalReference}>Reference: {successfulReportId}</Text>
+            <Pressable accessibilityRole="button" style={s.button} onPress={() => {
+              setSuccessfulReportId(null);
+              router.navigate('/reports');
+            }}>
+              <Text style={s.buttonText}>View Reports</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" style={s.modalSecondary} onPress={() => {
+              setSuccessfulReportId(null);
+              setOutcome('');
+            }}>
+              <Text style={s.modalSecondaryText}>Submit another fictional report</Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -148,5 +170,13 @@ const s = StyleSheet.create({
   button: { borderRadius: 12, backgroundColor: '#0f766e', padding: 16, alignItems: 'center' },
   disabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontWeight: '800', textAlign: 'center' },
-  outcome: { color: '#0f766e', fontSize: 13, lineHeight: 21 }
+  outcome: { color: '#0f766e', fontSize: 13, lineHeight: 21 },
+  modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(15,23,42,0.65)' },
+  modalCard: { backgroundColor: '#fff', borderRadius: 22, padding: 24, gap: 16, alignItems: 'stretch' },
+  modalIcon: { alignSelf: 'center', textAlign: 'center', backgroundColor: '#ccfbf1', overflow: 'hidden', width: 54, height: 54, borderRadius: 27, lineHeight: 54, color: '#0f766e', fontSize: 30, fontWeight: '800' },
+  modalTitle: { textAlign: 'center', fontSize: 21, fontWeight: '800', color: '#0f172a' },
+  modalBody: { textAlign: 'center', color: '#475569', fontSize: 14, lineHeight: 22 },
+  modalReference: { textAlign: 'center', color: '#0f766e', fontSize: 12, lineHeight: 19 },
+  modalSecondary: { padding: 12, alignItems: 'center' },
+  modalSecondaryText: { color: '#0f766e', fontWeight: '700', textAlign: 'center' }
 });
