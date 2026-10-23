@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { ActivityIndicator, Alert, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useDataSettings } from '@/context/data-settings';
 import { normalizePrivateLanUrl } from '@/lib/public-reports';
 import { useDemoLocation, validDemoLocation } from '@/context/demo-location';
@@ -100,6 +100,35 @@ export default function SubmitScreen() {
       setSubmitting(false);
     }
   }
+  if (successfulReportId !== null) {
+    return (
+      <View style={s.successPage}>
+        <View style={s.successCard}>
+          <Text style={s.successIcon}>✓</Text>
+          <Text accessibilityRole="header" style={s.successTitle}>Report submitted successfully!</Text>
+          <Text style={s.modalBody}>Your fictional report was received by management and is awaiting human review.</Text>
+          <Text selectable style={s.modalReference}>Reference: {successfulReportId}</Text>
+          <Pressable accessibilityRole="button" style={s.button} onPress={() => {
+            setSuccessfulReportId(null);
+            setOutcome('');
+            router.navigate('/reports');
+          }}>
+            <Text style={s.buttonText}>View Reports</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" style={s.modalSecondary} onPress={() => {
+            setSuccessfulReportId(null);
+            setOutcome('');
+            setCategory('flooding');
+            setImpact('unknown');
+            setPlace(chosenLocation ? 'map' : 0);
+          }}>
+            <Text style={s.modalSecondaryText}>Submit another fictional report</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={s.page} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · NOTHING SENT' : 'LOCAL BACKEND · FICTIONAL INTAKE'}</Text>
@@ -124,28 +153,6 @@ export default function SubmitScreen() {
         {outcome ? <Text accessibilityRole="text" style={s.outcome}>{outcome}</Text> : null}
       </View>
       <Text style={s.small}>Local Backend sends fictional data to your PC only. Reports remain unverified until a human operator reviews them. Nothing automatically closes or alters roads. Photos will be added in M4.</Text>
-      <Modal visible={successfulReportId !== null} transparent animationType="fade" onRequestClose={() => setSuccessfulReportId(null)}>
-        <View style={s.modalBackdrop}>
-          <View style={s.modalCard} accessibilityRole="alert">
-            <Text style={s.modalIcon}>✓</Text>
-            <Text style={s.modalTitle}>Report submitted successfully!</Text>
-            <Text style={s.modalBody}>Your fictional report has been received by management and is awaiting human review.</Text>
-            <Text selectable style={s.modalReference}>Reference: {successfulReportId}</Text>
-            <Pressable accessibilityRole="button" style={s.button} onPress={() => {
-              setSuccessfulReportId(null);
-              router.navigate('/reports');
-            }}>
-              <Text style={s.buttonText}>View Reports</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" style={s.modalSecondary} onPress={() => {
-              setSuccessfulReportId(null);
-              setOutcome('');
-            }}>
-              <Text style={s.modalSecondaryText}>Submit another fictional report</Text>
-            </Pressable>
-          </View>
-        </View>
-      </Modal>
     </ScrollView>
   );
 }
@@ -171,10 +178,10 @@ const s = StyleSheet.create({
   disabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontWeight: '800', textAlign: 'center' },
   outcome: { color: '#0f766e', fontSize: 13, lineHeight: 21 },
-  modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(15,23,42,0.65)' },
-  modalCard: { backgroundColor: '#fff', borderRadius: 22, padding: 24, gap: 16, alignItems: 'stretch' },
-  modalIcon: { alignSelf: 'center', textAlign: 'center', backgroundColor: '#ccfbf1', overflow: 'hidden', width: 54, height: 54, borderRadius: 27, lineHeight: 54, color: '#0f766e', fontSize: 30, fontWeight: '800' },
-  modalTitle: { textAlign: 'center', fontSize: 21, fontWeight: '800', color: '#0f172a' },
+  successPage: { flex: 1, backgroundColor: '#f8fafc', justifyContent: 'center', padding: 22 },
+  successCard: { backgroundColor: '#fff', borderRadius: 22, padding: 24, gap: 18 },
+  successIcon: { textAlign: 'center', fontSize: 48, color: '#0f766e', fontWeight: '800' },
+  successTitle: { textAlign: 'center', fontSize: 24, fontWeight: '800', color: '#0f172a' },
   modalBody: { textAlign: 'center', color: '#475569', fontSize: 14, lineHeight: 22 },
   modalReference: { textAlign: 'center', color: '#0f766e', fontSize: 12, lineHeight: 19 },
   modalSecondary: { padding: 12, alignItems: 'center' },
