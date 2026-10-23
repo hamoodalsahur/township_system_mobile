@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -43,6 +43,8 @@ export default function MapScreen() {
   const { mode, backendUrl } = useDataSettings();
   const { chosenLocation, chooseLocation } = useDemoLocation();
   const router = useRouter();
+  const scrollRef = useRef<ScrollView>(null);
+  const spotlightY = useRef(0);
   const [choosingLocation, setChoosingLocation] = useState(false);
   const [reportPanelOpen, setReportPanelOpen] = useState(false);
   const [showAllReports, setShowAllReports] = useState(false);
@@ -97,7 +99,7 @@ export default function MapScreen() {
   const shown = showAllReports ? latest : latest.slice(0, 8);
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]}>
+    <ScrollView ref={scrollRef} style={s.page} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]}>
       <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · SAMPLE SCENARIOS' : 'LOCAL BACKEND · FICTIONAL REPORTS'}</Text>
       <Text style={s.title}>Township Map</Text>
       <Text style={s.subtitle}>Bandar Bukit Raja · Explore fictional incident reports</Text>
@@ -163,7 +165,7 @@ export default function MapScreen() {
               pinColor={report.reviewState === 'corroborated' ? '#0f766e' : '#f59e0b'}
               title={readable(report.category) + ' · Fictional'}
               description={readable(report.impact) + ' · Not road guidance'}
-              onPress={() => { setSelectedId(report.id); setPhotoErrorFor(null); }}
+              onPress={() => { setSelectedId(report.id); setPhotoErrorFor(null); scrollRef.current?.scrollTo({ y: spotlightY.current, animated: true }); }}
             />
           ))}
         </MapView>
@@ -205,7 +207,7 @@ export default function MapScreen() {
         <Text style={s.body}>There are no reports with demonstration-area map coordinates.</Text>
       </View>}
 
-      {selected && !loading && !error && <View style={s.spotlight}>
+      {selected && !loading && !error && <View style={s.spotlight} onLayout={event => { spotlightY.current = event.nativeEvent.layout.y; }}>
         <Text style={s.eyebrow}>INCIDENT DETAILS · FICTIONAL</Text>
         <Text style={s.spotlightTitle}>{readable(selected.category)}</Text>
         <View style={s.statusPill}><Text style={s.statusText}>{selected.reviewState === 'corroborated'
