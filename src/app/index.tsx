@@ -236,7 +236,7 @@ export default function MapScreen() {
         {shown.map(report => <Pressable key={report.id} accessibilityRole="button"
           accessibilityState={{ selected: selected?.id === report.id }}
           style={[s.incidentRow, selected?.id === report.id && s.incidentRowActive]}
-          onPress={() => { setSelectedId(report.id); setPhotoErrorFor(null); }}>
+          onPress={() => { setSelectedId(report.id); setPhotoErrorFor(null); scrollRef.current?.scrollTo({ y: spotlightY.current, animated: true }); }}>
           <View style={s.incidentRowHead}>
             <Text style={s.incidentName}>{readable(report.category)}</Text>
             <Text style={s.incidentStatus}>{report.reviewState === 'corroborated' ? 'Reviewed' : 'Awaiting review'}</Text>
