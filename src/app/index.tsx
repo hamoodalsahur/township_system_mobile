@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useDemoLocation, validDemoLocation } from '@/context/demo-location';
@@ -7,7 +7,7 @@ import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { BBR_ROADS, BBR_ROAD_SOURCE_COUNT } from '@/data/bbr-roads.generated';
 import { visibleRoads, ROAD_STYLES } from '@/lib/mobile-roads';
 import { useDataSettings } from '@/context/data-settings';
-import { loadPublicReports, type PublicReport } from '@/lib/public-reports';
+import { loadPublicReports, normalizePrivateLanUrl, type PublicReport } from '@/lib/public-reports';
 
 type MapReport = {
   id: string;
@@ -18,6 +18,7 @@ type MapReport = {
   latitude: number;
   longitude: number;
   hasApprovedPhoto: boolean;
+  createdAt?: string;
 };
 
 const DEMO_LOCATIONS: MapReport[] = [
@@ -43,6 +44,9 @@ export default function MapScreen() {
   const { chosenLocation, chooseLocation } = useDemoLocation();
   const router = useRouter();
   const [choosingLocation, setChoosingLocation] = useState(false);
+  const [reportPanelOpen, setReportPanelOpen] = useState(false);
+  const [showAllReports, setShowAllReports] = useState(false);
+  const [photoErrorFor, setPhotoErrorFor] = useState<string | null>(null);
   const [locationHint, setLocationHint] = useState('');
   const [backendReports, setBackendReports] = useState<MapReport[]>([]);
   const [region, setRegion] = useState<Region>(DEFAULT_REGION);
@@ -85,137 +89,48 @@ export default function MapScreen() {
   }, [mode, backendUrl, refreshVersion]);
 
   const reports = mode === 'mock' ? DEMO_LOCATIONS : !loading && !error ? backendReports : [];
-  const selected = reports.find(report => report.id === selectedId);
+  const sortedReports = useMemo(() => [...reports].sort((a, b) => {
+    const left = a.createdAt ? Date.parse(a.createdAt) || 0 : 0;
+    const right = b.createdAt ? Date.parse(b.createdAt) || 0 : 0;
+    return right - left;
+  }), [reports]);
+  const selected = sortedReports.find(report => report.id === selectedId) ?? sortedReports[0];
+  const reviewedCount = sortedReports.filter(report => report.reviewState === 'corroborated').length;
+  const safeBackendUrl = normalizePrivateLanUrl(backendUrl);
+  const shownReports = showAllReports ? sortedReports : sortedReports.slice(0, 8);
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]}>
-      <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · SAMPLE MARKERS' : 'LOCAL BACKEND · FICTIONAL REPORTS'}</Text>
+    <ScrollView style={s.page} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
+      <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · SAMPLE SCENARIOS' : 'LOCAL BACKEND · FICTIONAL REPORTS'}</Text>
       <Text style={s.title}>Township Map</Text>
-      <Text style={s.subtitle}>Bandar Bukit Raja · Academic prototype</Text>
-      <View style={s.mapFrame}>
-        <MapView
-          style={s.map}
-          initialRegion={DEFAULT_REGION}
-          onRegionChangeComplete={setRegion}
-          onPress={event => {
-            if (!choosingLocation) return;
-            const point = event.nativeEvent.coordinate;
-            if (!validDemoLocation(point)) {
-              setLocationHint('Please tap inside the fictional reporting rectangle: longitude 101.40–101.47, latitude 3.06–3.11.');
-              return;
-            }
-            chooseLocation({ latitude: point.latitude, longitude: point.longitude });
-            setLocationHint('Example location selected. You can now open Submit.');
-            setChoosingLocation(false);
-          }}
-          showsUserLocation={false}
-          showsMyLocationButton={false}
-        >
-          {roadsOnScreen.map(road => <Polyline
-            key={road.id}
-            coordinates={road.coordinates.map(([latitude, longitude]) => ({ latitude, longitude }))}
-            strokeColor={ROAD_STYLES[road.category].color}
-            strokeWidth={ROAD_STYLES[road.category].width}
-            geodesic={false}
-          />)}
-          {chosenLocation && <Marker
-            coordinate={chosenLocation}
-            pinColor="#7c3aed"
-            title="Example submission location"
-            description="Selected for a fictional report only"
-          />}
-          {reports.map(report => (
-            <Marker
-              key={report.id}
-              coordinate={{ latitude: report.latitude, longitude: report.longitude }}
-              pinColor={report.reviewState === 'corroborated' ? '#0f766e' : '#f59e0b'}
-              title={readable(report.category) + ' · Fictional'}
-              description={readable(report.impact) + ' · Not road guidance'}
-              onPress={() => setSelectedId(report.id)}
-            />
-          ))}
-        </MapView>
-        <View style={s.mapBadge} pointerEvents="none">
-          <Text style={s.mapBadgeText}>FICTIONAL REPORTS ONLY</Text>
+      <Text style={s.subtitle}>Bandar Bukit Raja · Explore fictional incident reports</Text>
+
+      <Pressable accessibilityRole="button" accessibilityState={{ expanded: reportPanelOpen }} style={s.reportToggle} onPress={() => {
+        setReportPanelOpen(open => !open);
+        setChoosingLocation(false);
+      }}>
+        <Text style={s.reportToggleTitle}>{reportPanelOpen ? '−' : '+'}  Report an Incident</Text>
+        <Text style={s.reportToggleHint}>{reportPanelOpen ? 'Hide location selection' : 'Expand to choose a fictional report location'}</Text>
+      </Pressable>
+      {reportPanelOpen && (
+        <View style={s.locationPanel}>
+          <Text style={s.cardTitle}>Choose an illustrative report location</Text>
+          <Text style={s.body}>Tap Choose point on map, then tap an empty part of the map below. Only the demo reporting rectangle is accepted. Phone GPS is not used.</Text>
+          <Pressable accessibilityRole="button" onPress={() => { setChoosingLocation(v => !v); setLocationHint(''); }} style={[s.refresh, choosingLocation && s.locationActive]}>
+            <Text style={s.refreshText}>{choosingLocation ? 'Cancel picking' : 'Choose point on map'}</Text>
+          </Pressable>
+          {choosingLocation && <Text style={s.locationHint}>Selection mode active. Tap the map directly below to select your fictional location.</Text>}
+          {locationHint ? <Text style={s.locationHint}>{locationHint}</Text> : null}
+          {chosenLocation && (
+            <View style={s.chosen}>
+              <Text style={s.detail}>Selected point: {chosenLocation.latitude.toFixed(5)}, {chosenLocation.longitude.toFixed(5)}</Text>
+              <Pressable accessibilityRole="button" onPress={() => router.navigate('/submit')} style={s.refresh}>
+                <Text style={s.refreshText}>Use in Submit</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" onPress={() => { chooseLocation(null); setLocationHint(''); }}>
+                <Text style={s.detail}>Clear selected point</Text>
+              </Pressable>
+            </View>
+          )}
         </View>
-      </View>
-
-      <View style={s.locationPanel}>
-        <Text style={s.cardTitle}>Choose an illustrative report location</Text>
-        <Text style={s.body}>Tap an empty part of the map to choose a fictional report point. Only the backend's research rectangle is accepted. This does not use phone GPS.</Text>
-        <Pressable accessibilityRole="button" onPress={() => { setChoosingLocation(v => !v); setLocationHint(''); }} style={[s.refresh, choosingLocation && s.locationActive]}>
-          <Text style={s.refreshText}>{choosingLocation ? 'Cancel picking' : 'Choose point on map'}</Text>
-        </Pressable>
-        {choosingLocation && <Text style={s.locationHint}>Selection mode is active. Tap the map where you want to place the fictional report.</Text>}
-        {locationHint ? <Text style={s.locationHint}>{locationHint}</Text> : null}
-        {chosenLocation && <View style={s.chosen}>
-          <Text style={s.detail}>Chosen demo point: {chosenLocation.latitude.toFixed(5)}, {chosenLocation.longitude.toFixed(5)}</Text>
-          <Pressable accessibilityRole="button" onPress={() => router.navigate('/submit')} style={s.refresh}><Text style={s.refreshText}>Use in Submit</Text></Pressable>
-          <Pressable accessibilityRole="button" onPress={() => { chooseLocation(null); setLocationHint(''); }}><Text style={s.detail}>Clear chosen point</Text></Pressable>
-        </View>}
-      </View>
-      <View style={s.roadPanel}>
-        <Text style={s.cardTitle}>BBR reference road overlay</Text>
-        <Text style={s.body}>{BBR_ROAD_SOURCE_COUNT === 0
-          ? 'Local road geometry has not been prepared on this device. The native map and fictional markers still work normally.'
-          : BBR_ROAD_SOURCE_COUNT + ' imported OSM reference features. Showing up to 180 nearby road features to keep the map responsive.'}</Text>
-        {BBR_ROAD_SOURCE_COUNT > 0 && <Pressable accessibilityRole="button" onPress={() => setShowRoads(value => !value)} style={s.refresh}>
-          <Text style={s.refreshText}>{showRoads ? 'Hide blue roads' : 'Show blue roads'}</Text>
-        </Pressable>}
-        <Text style={s.legend}>━━━━ Major   ━━━━ Local   ━━━━ Service   ━━━━ Other</Text>
-        <Text style={s.notice}>OpenStreetMap contributors © · ODbL · Reference geometry only. No road-access, closure or navigation claims.</Text>
-      </View>
-
-      {mode === 'local' && <Pressable accessibilityRole="button" onPress={refresh} style={s.refresh}><Text style={s.refreshText}>Refresh map reports</Text></Pressable>}
-      {loading && <View style={s.card}><ActivityIndicator color="#0f766e"/><Text style={s.body}>Loading fictional reports from your PC…</Text></View>}
-      {error ? <View style={s.card}><Text style={s.errorTitle}>The map reports could not load</Text><Text style={s.body}>{error}</Text><Text style={s.body}>No old markers are shown as current. Check About for your PC connection.</Text><Pressable style={s.refresh} onPress={refresh}><Text style={s.refreshText}>Retry</Text></Pressable></View> : null}
-      {mode === 'local' && !loading && !error && reports.length === 0 ? (
-        <View style={s.card}><Text style={s.cardTitle}>No map reports yet</Text><Text style={s.body}>This backend has no fictional reports with coordinates in the demonstration area.</Text></View>
-      ) : null}
-
-      {selected && !loading && !error ? (
-        <View style={s.card}>
-          <Text style={s.cardTitle}>{readable(selected.category)} · Fictional report</Text>
-          <Text style={s.body}>{selected.description}</Text>
-          <Text style={s.detail}>Suspected impact: {readable(selected.impact)}</Text>
-          <Text style={s.detail}>Review: {selected.reviewState === 'corroborated' ? 'Human-corroborated demonstration report' : 'Not human-corroborated'}</Text>
-          <Text style={s.detail}>Reference: {selected.id}</Text>
-          <Text style={s.detail}>{selected.hasApprovedPhoto ? 'Approved demonstration photo available in the backend (not shown here).' : 'No approved demonstration photo shown.'}</Text>
-        </View>
-      ) : !loading && !error && reports.length > 0 ? (
-        <View style={s.card}>
-          <Text style={s.cardTitle}>Explore the map</Text>
-          <Text style={s.body}>Pan or pinch to zoom, then tap one of the {reports.length} fictional report markers to read more.</Text>
-        </View>
-      ) : null}
-
-      <Text style={s.notice}>Academic prototype only. No real incidents, reliable live road status, verified closures, emergency reporting, or navigation advice. Blue OSM overlays are geographic reference only and must not be used for travel.</Text>
-    </ScrollView>
-  );
-}
-
-const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#f8fafc' },
-  content: { padding: 20, paddingTop: 24, paddingBottom: 45, gap: 15 },
-  eyebrow: { fontSize: 11, fontWeight: '800', color: '#0f766e' },
-  title: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
-  subtitle: { fontSize: 14, color: '#64748b' },
-  mapFrame: { height: 440, borderRadius: 20, overflow: 'hidden', backgroundColor: '#dbeafe' },
-  map: { width: '100%', height: '100%' },
-  mapBadge: { position: 'absolute', top: 12, left: 12, backgroundColor: '#fff', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  mapBadgeText: { fontSize: 10, fontWeight: '800', color: '#0f766e' },
-  card: { padding: 20, backgroundColor: '#fff', borderRadius: 18, gap: 10 },
-  cardTitle: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
-  body: { fontSize: 14, lineHeight: 22, color: '#475569' },
-  detail: { fontSize: 12, color: '#0f766e', lineHeight: 19 },
-  notice: { fontSize: 12, lineHeight: 19, color: '#64748b' },
-  refresh: { padding: 13, backgroundColor: '#0f766e', borderRadius: 12, alignItems: 'center', alignSelf: 'flex-start' },
-  refreshText: { color: '#fff', fontWeight: '800' },
-  errorTitle: { color: '#9a3412', fontSize: 15, fontWeight: '800' },
-  roadPanel: { backgroundColor: '#fff', borderRadius: 18, padding: 20, gap: 10 },
-  locationPanel: { backgroundColor: '#fff', borderRadius: 18, padding: 20, gap: 12 },
-  locationActive: { backgroundColor: '#7c3aed' },
-  locationHint: { color: '#6d28d9', fontSize: 12, lineHeight: 19 },
-  chosen: { gap: 11 },
-  legend: { color: '#2563eb', fontSize: 12, fontWeight: '700' }
-});
+      )}
