@@ -19,11 +19,11 @@ The real local BBR road dataset still must be prepared on the owner's PC via `sc
 
 ## Submission confirmation and navigation
 
-After the Local Backend confirms a fictional report was saved and returns a valid ID, Submit presents an **in-app confirmation dialog**. It shows the report reference and explains that management review is still pending.
+After the backend confirms and returns a saved fictional report ID, the Submit form is replaced by a **full-screen success state**. This avoids an unreliable native popup/Modal underneath Expo native tabs. The success view displays the reference, confirms human review is pending, and presents two choices:
 
-- **View Reports** closes the dialog and navigates away from Submit to the Reports tab. Refresh the feed if necessary.
-- **Submit another fictional report** dismisses the dialog and stays on the cleared form.
-- Mock mode previews only; rejection, connectivity failure or an uncertain server response must never show the success dialog or navigate away automatically.
-- Verify both choices, including that a single tap produces only one report, on the physical iPhone. The earlier native Alert has been replaced because it did not visibly display on the user's device.
+- **View Reports:** exits the submission state and opens the Reports tab.
+- **Submit another fictional report:** returns to a cleared form.
 
-No changes to the management website, private data, GeoJSON or permissions.
+Mock preview, rejection, timeout, and uncertain network responses must never show the success screen. They remain on the form with a cautious outcome. This is only for fictional university research reports.
+
+On an actual iPhone, test one fresh invented submission with a map-picked point; verify the full-screen confirmation before choosing View Reports and confirm the same ID on management. Also test another report, Mock Demo and disconnected Wi-Fi. No database reset or road regeneration required.
