@@ -1,0 +1,28 @@
+name: Protect the resident repository
+on:
+  push:
+    branches: [main, "feature/**"]
+  pull_request:
+    branches: [main]
+jobs:
+  tracked-secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the mobile project
+        uses: actions/checkout@v4
+      - name: Refuse tracked environment files
+        shell: bash
+        run: |
+          if git ls-files | grep -E '(^|/)\.env($|\.)' | grep -vE '(^|/)\.env\.example$'; then
+            echo "A private environment file is tracked. Remove it before continuing."
+            exit 1
+          fi
+          echo "No private .env files are tracked."
+      - name: Prevent accidental bundled operator credentials
+        shell: bash
+        run: |
+          if grep -RIl --include='*.ts' --include='*.tsx' --exclude='*.d.ts' 'DEMO_OPERATOR_KEY' src; then
+            echo "Operator-only credentials must not be mentioned in mobile source files."
+            exit 1
+          fi
+          echo "Resident source files contain no operator credential references."

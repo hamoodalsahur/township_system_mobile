@@ -1,56 +1,51 @@
-# Welcome to your Expo app 👋
+# Township resident mobile prototype
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+A small Expo + React Native companion to the separate [township management website](https://github.com/hamoodalsahur/township_flood_system). The app explores **fictional Bandar Bukit Raja hazard-report scenarios** for a university research demonstration. It is **not an emergency reporting service, navigation tool, verified road-closure map or public safety information source**.
 
-## Get started
+## Development environment
 
-1. Install dependencies
+- **Repo:** `township_system_mobile` — separate from the website, its SQLite database, operator credentials and local BBR GeoJSON.
+- **Expo SDK 57** / Expo Router / TypeScript; intended for Expo Go 57 on iPhone.
+- **Map:** Apple Maps via `react-native-maps` with fictional markers.
+- **Reports:** mock examples by default, or public fictional reports loaded from the development website backend.
+- **Submit:** mock preview by default; Local Backend can submit fictional reports only when the website API is running in development mode.
+- **About:** contains the Mock Demo / Local Backend selector and the PC connection test. Address/mode reset after app restart.
 
-   ```bash
-   npm install
-   ```
+## Start on Windows
 
-2. Start the app
+Open VS Code in this **mobile** repository and run:
 
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **src/app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
-
-```bash
-npm run reset-project
+```powershell
+npm ci
+npx tsc --noEmit
+npx expo start -c
 ```
 
-This command will move the starter code to the **example** directory and create a blank **src/app** directory where you can start developing.
+Scan the QR code with Expo Go on your iPhone. Keep the Windows PC and phone on your trusted private Wi-Fi. If the existing website backend is already running, leave it running; there is no reason to restart it. Otherwise start the separate website dev server according to that repo's instructions. In About, use the PC's private IPv4 address, for example `http://192.168.1.23:3000`. An iPhone's `localhost` does not point to the Windows PC.
 
-### Other setup steps
+**Do not tunnel the development write endpoints publicly.** The mobile app must never include or send `DEMO_OPERATOR_KEY`, access private evidence, or modify the website's local SQLite, `.env` or imported BBR road geometry.
 
-- To set up ESLint for linting, run `npx expo lint`, or follow our guide on ["Using ESLint and Prettier"](https://docs.expo.dev/guides/using-eslint/)
-- If you'd like to set up unit testing, follow our guide on ["Unit Testing with Jest"](https://docs.expo.dev/develop/unit-testing/)
-- Learn more about the TypeScript setup in this template in our guide on ["Using TypeScript"](https://docs.expo.dev/guides/typescript/)
+## Progress & open feature branches
 
-## Learn more
+- M0: iPhone ↔ PC private LAN connectivity — complete.
+- M1: four resident tabs, fictional report feed and connection settings — approved.
+- M2: fictional mobile → management submission — approved.
+- M3: native interactive map with fictional report markers — approved. Remaining: blue reference roads and map-selected report coordinates in **separate, unmerged PRs** requiring iPhone testing.
+- M4: private fictional sample-photo workflow — planned, **not implemented**.
+- M5: privacy, reliability, performance and repeatable FYP demonstration — ongoing.
 
-To learn more about developing your project with Expo, look at the following resources:
+### The local BBR road data
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+The actual BBR GeoJSON is held on the original website PC, not in this repository. The mobile map does **not** claim to contain or display that reference network until the owner runs the read-only preparation script described in `docs/m3-blue-road-overlays.md` on the road-overlay development branch. The only bundled road geometry on that branch is initially an **empty** placeholder. OpenStreetMap attribution is retained.
 
-## Join the community
+## Quality checks
 
-Join our community of developers creating universal apps.
+```powershell
+npx tsc --noEmit
+```
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+The road overlay branch additionally includes `node --test tests/*.test.mjs` and automated checks. See [the iPhone test matrix](docs/mobile-acceptance-matrix.md) for the end-to-end FYP demonstration process.
+
+### Prototype limitations
+
+No account authentication or per-user private report identity is offered. Don't submit identifying personal data or actual emergencies. Human review of fictional report text is performed separately on the management website. The app neither decides that roads are blocked nor provides routing, live access, verified closures or emergency response.
