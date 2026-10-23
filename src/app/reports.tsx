@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { MOCK_REPORTS } from '@/data/mock-reports';
 import { useDataSettings } from '@/context/data-settings';
-import { loadPublicReports, type PublicReport } from '@/lib/public-reports';
+import { loadPublicReports, normalizePrivateLanUrl, type PublicReport } from '@/lib/public-reports';
 
 type DisplayReport = {
   id: string; category: string; description: string;
-  impact: string; reviewState: string;
+  impact: string; reviewState: string; hasApprovedPhoto?: boolean;
 };
 type StatusFilter = 'all' | 'unverified' | 'corroborated';
 type CategoryFilter = 'all' | 'flooding' | 'roadworks' | 'fallen_tree' | 'pothole' | 'road_obstruction' | 'storm_damage' | 'other';
@@ -108,7 +108,16 @@ export default function ReportsScreen() {
               <Text style={s.detail}>Suspected impact: {display(report.impact)}</Text>
               <Text style={s.status}>{report.reviewState === 'corroborated' ? 'Human-reviewed fictional report' : 'Not corroborated · Fictional report'}</Text>
             </Pressable>
-            {selected === report.id ? <View style={s.expanded}><Text style={s.description}>{report.description}</Text><Text style={s.detail}>Reference: {report.id}</Text></View> : null}
+            {selected === report.id ? <View style={s.expanded}>
+              <Text style={s.description}>{report.description}</Text>
+              <Text style={s.detail}>Reference: {report.id}</Text>
+              {mode === 'local' && report.hasApprovedPhoto === true && normalizePrivateLanUrl(backendUrl)
+                ? <View style={s.approvedPhoto}>
+                    <Text style={s.detail}>Management-approved fictional sample photo</Text>
+                    <Image accessibilityLabel="Approved fictional sample report photo" source={{ uri: normalizePrivateLanUrl(backendUrl)! + '/api/v2/hazards/' + encodeURIComponent(report.id) + '/evidence/approved' }} style={s.reportPhoto} resizeMode="contain" />
+                  </View>
+                : <Text style={s.detail}>{mode === 'local' ? 'No public photo approved for this fictional report.' : 'Mock example — no stored photo.'}</Text>}
+            </View> : null}
           </View>)}
         </>
       ) : null}
@@ -134,6 +143,8 @@ const s = StyleSheet.create({
   card: { backgroundColor: '#fff', padding: 18, borderRadius: 18, gap: 9, borderWidth: 1, borderColor: '#e2e8f0' },
   category: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
   description: { color: '#334155', fontSize: 14, lineHeight: 21 },
+  approvedPhoto: { gap: 8, marginTop: 8 },
+  reportPhoto: { width: '100%', height: 180, borderRadius: 12, backgroundColor: '#f1f5f9' },
   detail: { color: '#64748b', fontSize: 12, lineHeight: 19, marginTop: 3 },
   status: { color: '#0f766e', fontSize: 12, fontWeight: '700', marginTop: 8 },
   expanded: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
