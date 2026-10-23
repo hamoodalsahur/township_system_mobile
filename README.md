@@ -69,4 +69,4 @@ The mobile app never needs the management operator key. That key stays with the 
 - `docs/m4-photo-flow.md` — photo approval and visibility workflow
 - `docs/m3-blue-road-overlays.md` — map styling notes
 
-This is a local academic-style technical prototype built for a **hackathon**, not production software. Use only fictional reports and non-identifying example images.
+This is a **hackathon prototype**, not production software. Use only fictional reports and non-identifying example images.
