@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDataSettings } from '@/context/data-settings';
 import { normalizePrivateLanUrl } from '@/lib/public-reports';
 import { useDemoLocation, validDemoLocation } from '@/context/demo-location';
@@ -23,6 +24,7 @@ type Category = typeof CATEGORIES[number][0];
 type Impact = typeof IMPACTS[number][0];
 
 export default function SubmitScreen() {
+  const insets = useSafeAreaInsets();
   const { mode, backendUrl } = useDataSettings();
   const router = useRouter();
   const { chosenLocation, chooseLocation } = useDemoLocation();
@@ -102,7 +104,7 @@ export default function SubmitScreen() {
   }
   if (successfulReportId !== null) {
     return (
-      <View style={s.successPage}>
+      <View style={[s.successPage, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }] }>
         <View style={s.successCard}>
           <Text style={s.successIcon}>✓</Text>
           <Text accessibilityRole="header" style={s.successTitle}>Report submitted successfully!</Text>
@@ -130,7 +132,7 @@ export default function SubmitScreen() {
   }
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    <ScrollView style={s.page} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
       <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · NOTHING SENT' : 'LOCAL BACKEND · FICTIONAL INTAKE'}</Text>
       <Text style={s.title}>Submit a Report</Text>
       <Text style={s.subtitle}>Practice reporting a made-up township condition. Not for actual hazards or emergencies.</Text>
