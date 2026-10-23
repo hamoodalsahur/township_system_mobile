@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDataSettings } from '@/context/data-settings';
 import { normalizePrivateLanUrl } from '@/lib/public-reports';
@@ -45,11 +45,12 @@ export default function SubmitScreen() {
   const [successfulReportId, setSuccessfulReportId] = useState<string | null>(null);
   const [evidence, setEvidence] = useState<PrivateEvidencePhoto | null>(null);
   const [evidenceMessage, setEvidenceMessage] = useState('');
+  const [imagePreviewUri, setImagePreviewUri] = useState<string | null>(null);
   const [evidenceBusy, setEvidenceBusy] = useState(false);
   const evidenceBusyRef = useRef(false);
 
   async function chooseSampleImage() {
-    if (evidenceBusyRef.current || !successfulReportId || mode !== 'local') return;
+    if (evidenceBusyRef.current || submitting) return;
     setEvidenceMessage('');
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -70,39 +71,21 @@ export default function SubmitScreen() {
         if (!processed.base64) continue;
         try {
           setEvidence(preparePrivateEvidence({ mimeType: 'image/jpeg', base64Data: processed.base64 }));
-          setEvidenceMessage('Sample image prepared. Upload is optional and separate from report submission.');
+          setImagePreviewUri(processed.uri);
+          setEvidenceMessage('Sample ready. It will upload privately after your fictional report is saved.');
           return;
         } catch { /* Re-encode smaller if this attempt is still too large. */ }
       }
       setEvidence(null);
+      setImagePreviewUri(null);
       setEvidenceMessage('Could not reduce this sample image below 200 kB. Choose a simpler example.');
     } catch {
       setEvidence(null);
+      setImagePreviewUri(null);
       setEvidenceMessage('Image selection could not finish. The report is already saved.');
     }
   }
 
-  async function sendSampleEvidence() {
-    if (evidenceBusyRef.current || !evidence || !successfulReportId || mode !== 'local') return;
-    evidenceBusyRef.current = true;
-    setEvidenceBusy(true);
-    setEvidenceMessage('');
-    // Remove the image from state before sending: no automatic resubmit or retry.
-    const photo = evidence;
-    const reportId = successfulReportId;
-    setEvidence(null);
-    try {
-      const result = await uploadPrivateEvidence(backendUrl, reportId, photo);
-      setEvidenceMessage(result.status === 'uploaded'
-        ? 'Sample evidence received privately. It awaits management review and is not public.'
-        : result.message);
-    } catch (error) {
-      setEvidenceMessage(error instanceof Error ? error.message : 'Upload could not be confirmed. Check management.');
-    } finally {
-      evidenceBusyRef.current = false;
-      setEvidenceBusy(false);
-    }
-  }
 
   async function submitReport() {
     if (inFlight.current) return;
@@ -153,10 +136,28 @@ export default function SubmitScreen() {
         return;
       }
       setOutcome('Fictional report sent to management. Reference: ' + body.report.id + '. Open Reports and refresh to see its review state.');
-      setSuccessfulReportId(body.report.id);
-      setEvidence(null);
-      setEvidenceMessage('');
+      const savedId = body.report.id;
+      setSuccessfulReportId(savedId);
       setDescription('');
+      if (evidence) {
+        const photo = evidence;
+        setEvidence(null);
+        setImagePreviewUri(null);
+        setEvidenceBusy(true);
+        setEvidenceMessage('Uploading sample privately to management…');
+        try {
+          const upload = await uploadPrivateEvidence(backendUrl, savedId, photo);
+          setEvidenceMessage(upload.status === 'uploaded'
+            ? 'Sample image received privately. It is awaiting management approval before appearing in Reports.'
+            : 'Report saved. Photo: ' + upload.message);
+        } catch {
+          setEvidenceMessage('Report saved. Photo delivery is uncertain; check management before trying again.');
+        } finally {
+          setEvidenceBusy(false);
+        }
+      } else {
+        setEvidenceMessage('No sample photo attached.');
+      }
     } catch (error) {
       setOutcome(error instanceof Error && error.name === 'AbortError'
         ? 'Request timed out. It may have reached the backend; check Reports before resending.'
@@ -175,19 +176,8 @@ export default function SubmitScreen() {
           <Text accessibilityRole="header" style={s.successTitle}>Report submitted successfully!</Text>
           <Text style={s.modalBody}>Your fictional report was received by management and is awaiting human review.</Text>
           <Text selectable style={s.modalReference}>Reference: {successfulReportId}</Text>
-          {mode === 'local' && (
-            <View style={s.evidenceSection}>
-              <Text style={s.evidenceTitle}>Optional fictional photo evidence</Text>
-              <Text style={s.modalBody}>Use only a non-personal sample image. It stays private until a management operator reviews it. Avoid faces, addresses and identifying details.</Text>
-              <Pressable accessibilityRole="button" disabled={evidenceBusy} style={[s.evidenceButton, evidenceBusy && s.disabled]} onPress={() => void chooseSampleImage()}>
-                <Text style={s.evidenceButtonText}>{evidence ? 'Change sample image' : 'Choose sample from library'}</Text>
-              </Pressable>
-              {evidence && <Pressable accessibilityRole="button" disabled={evidenceBusy} style={[s.button, evidenceBusy && s.disabled]} onPress={() => void sendSampleEvidence()}>
-                {evidenceBusy ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Upload sample privately</Text>}
-              </Pressable>}
-              {evidenceMessage ? <Text accessibilityRole="text" style={s.evidenceMessage}>{evidenceMessage}</Text> : null}
-            </View>
-          )}
+          {evidenceMessage ? <Text accessibilityRole="text" style={s.evidenceMessage}>{evidenceMessage}</Text> : null}
+
           <Pressable accessibilityRole="button" disabled={evidenceBusy} style={[s.button, evidenceBusy && s.disabled]} onPress={() => {
             setEvidence(null);
             setEvidenceMessage('');
@@ -233,10 +223,22 @@ export default function SubmitScreen() {
         <Text style={s.label}>Fictional description</Text>
         <TextInput style={s.input} value={description} onChangeText={setDescription} multiline maxLength={400} textAlignVertical="top" placeholder="Describe an invented road or drainage issue…" placeholderTextColor="#94a3b8" />
         <Text style={s.small}>{description.length}/400 characters (minimum 8 non-space characters)</Text>
+        <View style={s.evidenceSection}>
+          <Text style={s.label}>Optional sample photo</Text>
+          <Text style={s.small}>Choose a non-personal example image now. It will be sent privately only after the fictional report is successfully saved. A management operator must approve it before it can appear in Reports.</Text>
+          {imagePreviewUri ? <Image source={{ uri: imagePreviewUri }} resizeMode="contain" style={s.imagePreview} /> : null}
+          <Pressable accessibilityRole="button" disabled={submitting} style={s.evidenceButton} onPress={() => void chooseSampleImage()}>
+            <Text style={s.evidenceButtonText}>{evidence ? 'Change selected image' : 'Choose sample photo'}</Text>
+          </Pressable>
+          {evidence && <Pressable accessibilityRole="button" disabled={submitting} onPress={() => { setEvidence(null); setImagePreviewUri(null); setEvidenceMessage(''); }}>
+            <Text style={s.small}>Remove selected photo</Text>
+          </Pressable>}
+          {evidenceMessage ? <Text style={s.evidenceMessage}>{evidenceMessage}</Text> : null}
+        </View>
         <Pressable accessibilityRole="button" disabled={submitting} style={[s.button, submitting && s.disabled]} onPress={() => void submitReport()}>{submitting ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>{mode === 'mock' ? 'Preview fictional submission' : 'Send fictional report to management'}</Text>}</Pressable>
         {outcome ? <Text accessibilityRole="text" style={s.outcome}>{outcome}</Text> : null}
       </View>
-      <Text style={s.small}>Local Backend sends fictional data to your PC only. Reports remain unverified until a human operator reviews them. Nothing automatically closes or alters roads. Photos will be added in M4.</Text>
+      <Text style={s.small}>Local Backend sends fictional data to your PC only. Reports remain unverified until a human operator reviews them. Nothing automatically closes or alters roads. Sample photos are private until explicit operator approval.</Text>
     </ScrollView>
   );
 }
@@ -265,6 +267,7 @@ const s = StyleSheet.create({
   successPage: { flex: 1, backgroundColor: '#f8fafc' },
   successContent: { flexGrow: 1, justifyContent: 'center', padding: 22 },
   evidenceSection: { gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  imagePreview: { width: '100%', height: 150, backgroundColor: '#f1f5f9', borderRadius: 12 },
   evidenceTitle: { color: '#0f172a', fontWeight: '800', textAlign: 'center' },
   evidenceButton: { backgroundColor: '#e2e8f0', padding: 13, borderRadius: 12, alignItems: 'center' },
   evidenceButtonText: { color: '#0f172a', fontWeight: '700' },
