@@ -49,16 +49,25 @@ export default function SubmitScreen() {
   const [evidenceBusy, setEvidenceBusy] = useState(false);
   const evidenceBusyRef = useRef(false);
 
-  async function chooseSampleImage() {
+  async function chooseSampleImage(source: 'camera' | 'library') {
     if (evidenceBusyRef.current || submitting) return;
     setEvidenceMessage('');
     try {
-      const result = await ImagePicker.launchImageLibraryAsync({
+      if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          setEvidenceMessage('Camera permission was not granted. You can still choose a sample from the gallery.');
+          return;
+        }
+      }
+      const result = await (source === 'camera'
+        ? ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, exif: false, quality: 1 })
+        : ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsMultipleSelection: false,
         exif: false,
         quality: 1
-      });
+      }));
       if (result.canceled || !result.assets?.[0]) return;
       // Re-encode rather than uploading the original library file or its metadata.
       // Try progressively smaller JPEGs, staying under the backend's 200 kB limit.
@@ -82,7 +91,7 @@ export default function SubmitScreen() {
     } catch {
       setEvidence(null);
       setImagePreviewUri(null);
-      setEvidenceMessage('Image selection could not finish. The report is already saved.');
+      setEvidenceMessage('Could not prepare the image. Your report form has not been submitted.');
     }
   }
 
@@ -227,8 +236,11 @@ export default function SubmitScreen() {
           <Text style={s.label}>Optional sample photo</Text>
           <Text style={s.small}>Choose a non-personal example image now. It will be sent privately only after the fictional report is successfully saved. A management operator must approve it before it can appear in Reports.</Text>
           {imagePreviewUri ? <Image source={{ uri: imagePreviewUri }} resizeMode="contain" style={s.imagePreview} /> : null}
-          <Pressable accessibilityRole="button" disabled={submitting} style={s.evidenceButton} onPress={() => void chooseSampleImage()}>
-            <Text style={s.evidenceButtonText}>{evidence ? 'Change selected image' : 'Choose sample photo'}</Text>
+          <Pressable accessibilityRole="button" disabled={submitting} style={s.evidenceButton} onPress={() => void chooseSampleImage('camera')}>
+            <Text style={s.evidenceButtonText}>Take Photo</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" disabled={submitting} style={s.evidenceButton} onPress={() => void chooseSampleImage('library')}>
+            <Text style={s.evidenceButtonText}>{evidence ? 'Choose another from gallery' : 'Choose from Gallery'}</Text>
           </Pressable>
           {evidence && <Pressable accessibilityRole="button" disabled={submitting} onPress={() => { setEvidence(null); setImagePreviewUri(null); setEvidenceMessage(''); }}>
             <Text style={s.small}>Remove selected photo</Text>
