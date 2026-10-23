@@ -89,7 +89,7 @@ export function formatModule(roads, count) {
 // Map context only — not real-time road status, closure data or navigation.
 // OpenStreetMap contributors ©, ODbL — https://www.openstreetmap.org/copyright
 export const BBR_ROADS: readonly MobileRoad[] = ${text};
-export const BBR_ROAD_SOURCE_COUNT = ${count};
+export const BBR_ROAD_SOURCE_COUNT: number = ${count};
 `;
 }
 
