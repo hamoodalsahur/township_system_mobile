@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import { MOCK_REPORTS } from '@/data/mock-reports';
 import { useDataSettings } from '@/context/data-settings';
@@ -30,6 +31,7 @@ const statusFilters: readonly { value: StatusFilter; title: string }[] = [
 const display = (text: string) => text.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
 
 export default function ReportsScreen() {
+  const insets = useSafeAreaInsets();
   const { mode, backendUrl } = useDataSettings();
   const [reports, setReports] = useState<PublicReport[]>([]);
   const [loading, setLoading] = useState(false);
@@ -70,7 +72,7 @@ export default function ReportsScreen() {
   }), [available, status, categoryFilter, search]);
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    <ScrollView style={s.page} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
       <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · SAMPLE DATA' : 'LOCAL BACKEND · FICTIONAL REPORTS'}</Text>
       <Text style={s.title}>Community Reports</Text>
       <Text style={s.subtitle}>Explore fictional scenarios. These are not verified road conditions or closures.</Text>
