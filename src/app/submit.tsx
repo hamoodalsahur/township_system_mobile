@@ -1,7 +1,13 @@
-import { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDataSettings } from '@/context/data-settings';
 import { normalizePrivateLanUrl } from '@/lib/public-reports';
+import { preparePrivateEvidence, uploadPrivateEvidence, type PrivateEvidencePhoto } from '@/lib/private-evidence';
+import { useDemoLocation, validDemoLocation } from '@/context/demo-location';
 
 const CATEGORIES = [
   ['flooding', 'Flooding'], ['roadworks', 'Roadworks'],
@@ -21,14 +27,74 @@ type Category = typeof CATEGORIES[number][0];
 type Impact = typeof IMPACTS[number][0];
 
 export default function SubmitScreen() {
+  const insets = useSafeAreaInsets();
   const { mode, backendUrl } = useDataSettings();
+  const router = useRouter();
+  const { chosenLocation, chooseLocation } = useDemoLocation();
   const [category, setCategory] = useState<Category>('flooding');
   const [impact, setImpact] = useState<Impact>('unknown');
-  const [place, setPlace] = useState(0);
+  const [place, setPlace] = useState<number | 'map'>(0);
+  useEffect(() => {
+    if (chosenLocation) setPlace('map');
+    else setPlace(previous => previous === 'map' ? 0 : previous);
+  }, [chosenLocation]);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const inFlight = useRef(false);
   const [outcome, setOutcome] = useState('');
+  const [successfulReportId, setSuccessfulReportId] = useState<string | null>(null);
+  const [evidence, setEvidence] = useState<PrivateEvidencePhoto | null>(null);
+  const [evidenceMessage, setEvidenceMessage] = useState('');
+  const [imagePreviewUri, setImagePreviewUri] = useState<string | null>(null);
+  const [evidenceBusy, setEvidenceBusy] = useState(false);
+  const evidenceBusyRef = useRef(false);
+
+  async function chooseSampleImage(source: 'camera' | 'library') {
+    if (evidenceBusyRef.current || submitting) return;
+    setEvidenceMessage('');
+    try {
+      if (source === 'camera') {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          setEvidenceMessage('Camera permission was not granted. You can still choose a sample from the gallery.');
+          return;
+        }
+      }
+      const result = await (source === 'camera'
+        ? ImagePicker.launchCameraAsync({ mediaTypes: ['images'], allowsEditing: false, exif: false, quality: 1 })
+        : ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        exif: false,
+        quality: 1
+      }));
+      if (result.canceled || !result.assets?.[0]) return;
+      // Re-encode rather than uploading the original library file or its metadata.
+      // Try progressively smaller JPEGs, staying under the backend's 200 kB limit.
+      const image = result.assets[0];
+      for (const width of [960, 720, 480, 320]) {
+        const processed = await ImageManipulator.manipulateAsync(
+          image.uri, [{ resize: { width } }],
+          { compress: 0.45, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        );
+        if (!processed.base64) continue;
+        try {
+          setEvidence(preparePrivateEvidence({ mimeType: 'image/jpeg', base64Data: processed.base64 }));
+          setImagePreviewUri(processed.uri);
+          setEvidenceMessage('Sample ready. It will upload privately after your fictional report is saved.');
+          return;
+        } catch { /* Re-encode smaller if this attempt is still too large. */ }
+      }
+      setEvidence(null);
+      setImagePreviewUri(null);
+      setEvidenceMessage('Could not reduce this sample image below 200 kB. Choose a simpler example.');
+    } catch {
+      setEvidence(null);
+      setImagePreviewUri(null);
+      setEvidenceMessage('Could not prepare the image. Your report form has not been submitted.');
+    }
+  }
+
 
   async function submitReport() {
     if (inFlight.current) return;
@@ -49,10 +115,15 @@ export default function SubmitScreen() {
     inFlight.current = true;
     setSubmitting(true);
     setOutcome('');
+    setSuccessfulReportId(null);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
     try {
-      const location = PLACES[place];
+      const location = place === 'map' ? chosenLocation : PLACES[place];
+      if (!location || !validDemoLocation(location)) {
+        setOutcome('Choose a valid fictional location from the map or preset options.');
+        return;
+      }
       const response = await fetch(url + '/api/v2/hazards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -74,7 +145,28 @@ export default function SubmitScreen() {
         return;
       }
       setOutcome('Fictional report sent to management. Reference: ' + body.report.id + '. Open Reports and refresh to see its review state.');
+      const savedId = body.report.id;
+      setSuccessfulReportId(savedId);
       setDescription('');
+      if (evidence) {
+        const photo = evidence;
+        setEvidence(null);
+        setImagePreviewUri(null);
+        setEvidenceBusy(true);
+        setEvidenceMessage('Uploading sample privately to management…');
+        try {
+          const upload = await uploadPrivateEvidence(backendUrl, savedId, photo);
+          setEvidenceMessage(upload.status === 'uploaded'
+            ? 'Sample image received privately. It is awaiting management approval before appearing in Reports.'
+            : 'Report saved. Photo: ' + upload.message);
+        } catch {
+          setEvidenceMessage('Report saved. Photo delivery is uncertain; check management before trying again.');
+        } finally {
+          setEvidenceBusy(false);
+        }
+      } else {
+        setEvidenceMessage('No sample photo attached.');
+      }
     } catch (error) {
       setOutcome(error instanceof Error && error.name === 'AbortError'
         ? 'Request timed out. It may have reached the backend; check Reports before resending.'
@@ -85,8 +177,43 @@ export default function SubmitScreen() {
       setSubmitting(false);
     }
   }
+  if (successfulReportId !== null) {
+    return (
+      <ScrollView style={s.successPage} contentContainerStyle={[s.successContent, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
+        <View style={s.successCard}>
+          <Text style={s.successIcon}>✓</Text>
+          <Text accessibilityRole="header" style={s.successTitle}>Report submitted successfully!</Text>
+          <Text style={s.modalBody}>Your fictional report was received by management and is awaiting human review.</Text>
+          <Text selectable style={s.modalReference}>Reference: {successfulReportId}</Text>
+          {evidenceMessage ? <Text accessibilityRole="text" style={s.evidenceMessage}>{evidenceMessage}</Text> : null}
+
+          <Pressable accessibilityRole="button" disabled={evidenceBusy} style={[s.button, evidenceBusy && s.disabled]} onPress={() => {
+            setEvidence(null);
+            setEvidenceMessage('');
+            setSuccessfulReportId(null);
+            setOutcome('');
+            router.navigate('/reports');
+          }}>
+            <Text style={s.buttonText}>View Reports</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" disabled={evidenceBusy} style={[s.modalSecondary, evidenceBusy && s.disabled]} onPress={() => {
+            setEvidence(null);
+            setEvidenceMessage('');
+            setSuccessfulReportId(null);
+            setOutcome('');
+            setCategory('flooding');
+            setImpact('unknown');
+            setPlace(chosenLocation ? 'map' : 0);
+          }}>
+            <Text style={s.modalSecondaryText}>Submit another fictional report</Text>
+          </Pressable>
+        </View>
+      </ScrollView>
+    );
+  }
+
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    <ScrollView style={s.page} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
       <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · NOTHING SENT' : 'LOCAL BACKEND · FICTIONAL INTAKE'}</Text>
       <Text style={s.title}>Submit a Report</Text>
       <Text style={s.subtitle}>Practice reporting a made-up township condition. Not for actual hazards or emergencies.</Text>
@@ -96,15 +223,34 @@ export default function SubmitScreen() {
         <Text style={s.label}>Suspected impact (not verified)</Text>
         <View style={s.choices}>{IMPACTS.map(([value, label]) => <Pressable key={value} onPress={() => setImpact(value)} accessibilityRole="button" accessibilityState={{ selected: impact === value }} style={[s.chip, impact === value && s.chipActive]}><Text style={[s.chipText, impact === value && s.chipTextActive]}>{label}</Text></Pressable>)}</View>
         <Text style={s.label}>Example location</Text>
-        <Text style={s.small}>Preset demonstration points only. Tap-to-place map selection comes in M3. No GPS is requested.</Text>
+        <Text style={s.small}>Choose a preset or select a fictional point in the Map tab. No GPS or personal location is requested.</Text>
+        {chosenLocation && <Pressable style={[s.location, place === 'map' && s.locationActive]} onPress={() => setPlace('map')} accessibilityRole="radio" accessibilityState={{ checked: place === 'map' }}>
+          <Text style={s.locationText}>{place === 'map' ? '◉' : '○'} Map-selected demo point ({chosenLocation.latitude.toFixed(5)}, {chosenLocation.longitude.toFixed(5)})</Text>
+        </Pressable>}
         {PLACES.map((item, i) => <Pressable key={item.label} style={[s.location, place === i && s.locationActive]} onPress={() => setPlace(i)} accessibilityRole="radio" accessibilityState={{ checked: place === i }}><Text style={s.locationText}>{place === i ? '◉' : '○'} {item.label}</Text></Pressable>)}
+        {chosenLocation && <Pressable accessibilityRole="button" onPress={() => { chooseLocation(null); setPlace(0); }}><Text style={s.small}>Clear map-selected point</Text></Pressable>}
         <Text style={s.label}>Fictional description</Text>
         <TextInput style={s.input} value={description} onChangeText={setDescription} multiline maxLength={400} textAlignVertical="top" placeholder="Describe an invented road or drainage issue…" placeholderTextColor="#94a3b8" />
         <Text style={s.small}>{description.length}/400 characters (minimum 8 non-space characters)</Text>
+        <View style={s.evidenceSection}>
+          <Text style={s.label}>Optional sample photo</Text>
+          <Text style={s.small}>Choose a non-personal example image now. It will be sent privately only after the fictional report is successfully saved. A management operator must approve it before it can appear in Reports.</Text>
+          {imagePreviewUri ? <Image source={{ uri: imagePreviewUri }} resizeMode="contain" style={s.imagePreview} /> : null}
+          <Pressable accessibilityRole="button" disabled={submitting} style={s.evidenceButton} onPress={() => void chooseSampleImage('camera')}>
+            <Text style={s.evidenceButtonText}>Take Photo</Text>
+          </Pressable>
+          <Pressable accessibilityRole="button" disabled={submitting} style={s.evidenceButton} onPress={() => void chooseSampleImage('library')}>
+            <Text style={s.evidenceButtonText}>{evidence ? 'Choose another from gallery' : 'Choose from Gallery'}</Text>
+          </Pressable>
+          {evidence && <Pressable accessibilityRole="button" disabled={submitting} onPress={() => { setEvidence(null); setImagePreviewUri(null); setEvidenceMessage(''); }}>
+            <Text style={s.small}>Remove selected photo</Text>
+          </Pressable>}
+          {evidenceMessage ? <Text style={s.evidenceMessage}>{evidenceMessage}</Text> : null}
+        </View>
         <Pressable accessibilityRole="button" disabled={submitting} style={[s.button, submitting && s.disabled]} onPress={() => void submitReport()}>{submitting ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>{mode === 'mock' ? 'Preview fictional submission' : 'Send fictional report to management'}</Text>}</Pressable>
         {outcome ? <Text accessibilityRole="text" style={s.outcome}>{outcome}</Text> : null}
       </View>
-      <Text style={s.small}>Local Backend sends fictional data to your PC only. Reports remain unverified until a human operator reviews them. Nothing automatically closes or alters roads. Photos will be added in M4.</Text>
+      <Text style={s.small}>Local Backend sends fictional data to your PC only. Reports remain unverified until a human operator reviews them. Nothing automatically closes or alters roads. Sample photos are private until explicit operator approval.</Text>
     </ScrollView>
   );
 }
@@ -129,5 +275,20 @@ const s = StyleSheet.create({
   button: { borderRadius: 12, backgroundColor: '#0f766e', padding: 16, alignItems: 'center' },
   disabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontWeight: '800', textAlign: 'center' },
-  outcome: { color: '#0f766e', fontSize: 13, lineHeight: 21 }
+  outcome: { color: '#0f766e', fontSize: 13, lineHeight: 21 },
+  successPage: { flex: 1, backgroundColor: '#f8fafc' },
+  successContent: { flexGrow: 1, justifyContent: 'center', padding: 22 },
+  evidenceSection: { gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  imagePreview: { width: '100%', height: 150, backgroundColor: '#f1f5f9', borderRadius: 12 },
+  evidenceTitle: { color: '#0f172a', fontWeight: '800', textAlign: 'center' },
+  evidenceButton: { backgroundColor: '#e2e8f0', padding: 13, borderRadius: 12, alignItems: 'center' },
+  evidenceButtonText: { color: '#0f172a', fontWeight: '700' },
+  evidenceMessage: { color: '#0f766e', fontSize: 12, lineHeight: 19, textAlign: 'center' },
+  successCard: { backgroundColor: '#fff', borderRadius: 22, padding: 24, gap: 18 },
+  successIcon: { textAlign: 'center', fontSize: 48, color: '#0f766e', fontWeight: '800' },
+  successTitle: { textAlign: 'center', fontSize: 24, fontWeight: '800', color: '#0f172a' },
+  modalBody: { textAlign: 'center', color: '#475569', fontSize: 14, lineHeight: 22 },
+  modalReference: { textAlign: 'center', color: '#0f766e', fontSize: 12, lineHeight: 19 },
+  modalSecondary: { padding: 12, alignItems: 'center' },
+  modalSecondaryText: { color: '#0f766e', fontWeight: '700', textAlign: 'center' }
 });

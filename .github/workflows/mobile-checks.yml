@@ -17,5 +17,7 @@ jobs:
           cache: npm
       - name: Install the locked dependencies
         run: npm ci
+      - name: Verify offline road preparation checks
+        run: node --test tests/*.test.mjs
       - name: Check the mobile TypeScript code
         run: npx tsc --noEmit

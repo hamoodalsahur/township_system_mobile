@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDataSettings } from '@/context/data-settings';
 import { loadPublicReports, normalizePrivateLanUrl } from '@/lib/public-reports';
 
 export default function AboutScreen() {
+  const insets = useSafeAreaInsets();
   const { mode, setMode, backendUrl, setBackendUrl } = useDataSettings();
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState('');
@@ -20,7 +22,7 @@ export default function AboutScreen() {
   }
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    <ScrollView style={s.page} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
       <Text style={s.eyebrow}>TOWNSHIP INTELLIGENCE</Text>
       <Text style={s.title}>About & Connection</Text>
       <View style={s.card}>
@@ -33,7 +35,7 @@ export default function AboutScreen() {
           <Pressable accessibilityRole="button" accessibilityState={{ selected: mode === 'mock' }} onPress={() => setMode('mock')} style={[s.choice, mode === 'mock' && s.active]}><Text style={[s.choiceText, mode === 'mock' && s.activeText]}>Mock Demo</Text></Pressable>
           <Pressable accessibilityRole="button" accessibilityState={{ selected: mode === 'local' }} onPress={() => setMode('local')} style={[s.choice, mode === 'local' && s.active]}><Text style={[s.choiceText, mode === 'local' && s.activeText]}>Local Backend</Text></Pressable>
         </View>
-        <Text style={s.body}>{mode === 'mock' ? 'Bundled sample reports. Nothing is sent to management.' : 'Reads fictional reports from your Windows PC. Submission still stays in preview mode.'}</Text>
+        <Text style={s.body}>{mode === 'mock' ? 'Bundled sample reports. Nothing is sent to management.' : 'Reads fictional reports from your Windows PC. Fictional submissions are sent to your trusted PC for human review.'}</Text>
         <Text style={s.hint}>Mode and address are kept in memory and reset when the application restarts.</Text>
       </View>
       <View style={s.card}>
