@@ -27,3 +27,9 @@ After the backend confirms and returns a saved fictional report ID, the Submit f
 Mock preview, rejection, timeout, and uncertain network responses must never show the success screen. They remain on the form with a cautious outcome. This is only for fictional university research reports.
 
 On an actual iPhone, test one fresh invented submission with a map-picked point; verify the full-screen confirmation before choosing View Reports and confirm the same ID on management. Also test another report, Mock Demo and disconnected Wi-Fi. No database reset or road regeneration required.
+
+## Integrated Reports test branch
+
+Integration branch `feature/integration-m3-reports-category` also includes search, status chips and eight quick category chips (all, flooding, fallen tree, pothole, roadworks, road obstruction, storm damage, other) on Reports. Categories normalize mock labels and backend category codes. Combining category, review status and search filters narrows the same fetched list; no backend or data changes.
+
+On the physical iPhone, test: BBR overlay toggling, map-select fictional point, save fictional report, full-screen success, View Reports navigation, then search the saved reference; select its category and review status. Also test a category with zero matching reports, mock filtering, disconnected backend, and restoration. Confirm original 1269 roads still render after regenerating local TypeScript data if necessary. Do not merge until all integration checks pass.
