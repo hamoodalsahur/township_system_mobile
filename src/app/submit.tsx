@@ -169,7 +169,7 @@ export default function SubmitScreen() {
   }
   if (successfulReportId !== null) {
     return (
-      <View style={[s.successPage, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 16 }] }>
+      <ScrollView style={s.successPage} contentContainerStyle={[s.successContent, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 24 }]} keyboardShouldPersistTaps="handled">
         <View style={s.successCard}>
           <Text style={s.successIcon}>✓</Text>
           <Text accessibilityRole="header" style={s.successTitle}>Report submitted successfully!</Text>
@@ -188,7 +188,7 @@ export default function SubmitScreen() {
               {evidenceMessage ? <Text accessibilityRole="text" style={s.evidenceMessage}>{evidenceMessage}</Text> : null}
             </View>
           )}
-          <Pressable accessibilityRole="button" style={s.button} onPress={() => {
+          <Pressable accessibilityRole="button" disabled={evidenceBusy} style={[s.button, evidenceBusy && s.disabled]} onPress={() => {
             setEvidence(null);
             setEvidenceMessage('');
             setSuccessfulReportId(null);
@@ -197,7 +197,7 @@ export default function SubmitScreen() {
           }}>
             <Text style={s.buttonText}>View Reports</Text>
           </Pressable>
-          <Pressable accessibilityRole="button" style={s.modalSecondary} onPress={() => {
+          <Pressable accessibilityRole="button" disabled={evidenceBusy} style={[s.modalSecondary, evidenceBusy && s.disabled]} onPress={() => {
             setEvidence(null);
             setEvidenceMessage('');
             setSuccessfulReportId(null);
@@ -209,7 +209,7 @@ export default function SubmitScreen() {
             <Text style={s.modalSecondaryText}>Submit another fictional report</Text>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
     );
   }
 
@@ -262,7 +262,8 @@ const s = StyleSheet.create({
   disabled: { opacity: 0.6 },
   buttonText: { color: '#fff', fontWeight: '800', textAlign: 'center' },
   outcome: { color: '#0f766e', fontSize: 13, lineHeight: 21 },
-  successPage: { flex: 1, backgroundColor: '#f8fafc', justifyContent: 'center', padding: 22 },
+  successPage: { flex: 1, backgroundColor: '#f8fafc' },
+  successContent: { flexGrow: 1, justifyContent: 'center', padding: 22 },
   evidenceSection: { gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
   evidenceTitle: { color: '#0f172a', fontWeight: '800', textAlign: 'center' },
   evidenceButton: { backgroundColor: '#e2e8f0', padding: 13, borderRadius: 12, alignItems: 'center' },
