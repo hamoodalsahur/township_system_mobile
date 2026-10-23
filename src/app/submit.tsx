@@ -84,6 +84,11 @@ export default function SubmitScreen() {
         return;
       }
       setOutcome('Fictional report sent to management. Reference: ' + body.report.id + '. Open Reports and refresh to see its review state.');
+      Alert.alert(
+        'Report submitted successfully',
+        'Your fictional report was received by management.\n\nReference: ' + body.report.id + '\n\nIt is awaiting human review. You can check its status in Reports.',
+        [{ text: 'OK' }]
+      );
       setDescription('');
     } catch (error) {
       setOutcome(error instanceof Error && error.name === 'AbortError'
