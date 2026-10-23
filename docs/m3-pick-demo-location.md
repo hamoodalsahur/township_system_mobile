@@ -16,3 +16,9 @@ No GPS/location permission is requested. A chosen point lives only in memory and
 7. Clear the point or choose a preset; verify submit still works without GPS.
 
 The real local BBR road dataset still must be prepared on the owner's PC via `scripts/prepare-bbr-roads.mjs`. This branch does not generate it or touch the website.
+
+## Submission confirmation popup
+
+After a Local Backend fictional report is **confirmed saved** by the API, the iPhone shows a native **Report submitted successfully** popup containing the new reference ID, the human-review reminder, and an OK button. The inline confirmation remains visible as well. Mock Demo still only previews without saving. Error, timeout, invalid response, and offline outcomes must **not** display a success popup; the user should check Reports before retrying an uncertain delivery.
+
+Test the confirmation with a fresh invented description on a physical iPhone, then verify the matching ID on the management website. No database reset or reseeding is needed.
