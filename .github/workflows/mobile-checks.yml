@@ -19,3 +19,5 @@ jobs:
         run: npm ci
       - name: Check the mobile TypeScript code
         run: npx tsc --noEmit
+      - name: Test M4 private evidence boundary
+        run: node --experimental-strip-types --test tests/private-evidence.test.mjs
