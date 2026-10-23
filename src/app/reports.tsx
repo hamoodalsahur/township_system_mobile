@@ -10,6 +10,18 @@ type DisplayReport = {
   impact: string; reviewState: string;
 };
 type StatusFilter = 'all' | 'unverified' | 'corroborated';
+type CategoryFilter = 'all' | 'flooding' | 'roadworks' | 'fallen_tree' | 'pothole' | 'road_obstruction' | 'storm_damage' | 'other';
+const categoryFilters: readonly { value: CategoryFilter; title: string }[] = [
+  { value: 'all', title: 'All categories' },
+  { value: 'flooding', title: 'Flooding' },
+  { value: 'fallen_tree', title: 'Fallen Tree' },
+  { value: 'pothole', title: 'Pothole' },
+  { value: 'roadworks', title: 'Roadworks' },
+  { value: 'road_obstruction', title: 'Road Obstruction' },
+  { value: 'storm_damage', title: 'Storm Damage' },
+  { value: 'other', title: 'Other' }
+];
+const normalizedCategory = (value: string) => value.trim().toLowerCase().replace(/[\s-]+/g, '_');
 const statusFilters: readonly { value: StatusFilter; title: string }[] = [
   { value: 'all', title: 'All reports' },
   { value: 'unverified', title: 'Awaiting review' },
@@ -26,6 +38,7 @@ export default function ReportsScreen() {
   const [selected, setSelected] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('all');
+  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
   useFocusEffect(useCallback(() => { if (mode === 'local') refresh(); }, [mode, backendUrl, refresh]));
 
@@ -52,8 +65,9 @@ export default function ReportsScreen() {
   const visible = useMemo(() => available.filter(report => {
     const statusMatch = status === 'all' || (status === 'corroborated' ? report.reviewState === 'corroborated' : report.reviewState !== 'corroborated');
     const text = search.trim().toLowerCase();
-    return statusMatch && (!text || [report.category, report.description, report.id, report.impact].some(value => value.toLowerCase().includes(text)));
-  }), [available, status, search]);
+    const categoryMatch = categoryFilter === 'all' || normalizedCategory(report.category) === categoryFilter;
+    return statusMatch && categoryMatch && (!text || [report.category, report.description, report.id, report.impact].some(value => value.toLowerCase().includes(text)));
+  }), [available, status, categoryFilter, search]);
 
   return (
     <ScrollView style={s.page} contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
@@ -65,6 +79,13 @@ export default function ReportsScreen() {
       <View style={s.filters}>
         <Text style={s.filterLabel}>Find a fictional report</Text>
         <TextInput accessibilityLabel="Search report descriptions and categories" value={search} onChangeText={setSearch} placeholder="Search category, ID or description" autoCorrect={false} style={s.input} placeholderTextColor="#94a3b8" />
+        <Text style={s.filterSubheading}>Report category</Text>
+        <View style={s.options}>{categoryFilters.map(option => (
+          <Pressable key={option.value} accessibilityRole="button" accessibilityState={{ selected: categoryFilter === option.value }} onPress={() => setCategoryFilter(option.value)} style={[s.option, categoryFilter === option.value && s.active]}>
+            <Text style={[s.optionText, categoryFilter === option.value && s.activeText]}>{option.title}</Text>
+          </Pressable>
+        ))}</View>
+        <Text style={s.filterSubheading}>Review status</Text>
         <View style={s.options}>{statusFilters.map(option => (
           <Pressable key={option.value} accessibilityRole="button" accessibilityState={{ selected: status === option.value }} onPress={() => setStatus(option.value)} style={[s.option, status === option.value && s.active]}>
             <Text style={[s.optionText, status === option.value && s.activeText]}>{option.title}</Text>
@@ -78,7 +99,7 @@ export default function ReportsScreen() {
       {!loading && !error ? (
         <>
           <Text style={s.count}>Showing {visible.length} of {available.length} fictional reports</Text>
-          {visible.length === 0 && <View style={s.card}><Text style={s.category}>{available.length === 0 ? 'No fictional reports yet' : 'No matching reports'}</Text><Text style={s.detail}>{available.length === 0 ? 'This data source has no reports to show.' : 'Try changing the search or review filter.'}</Text></View>}
+          {visible.length === 0 && <View style={s.card}><Text style={s.category}>{available.length === 0 ? 'No fictional reports yet' : 'No matching reports'}</Text><Text style={s.detail}>{available.length === 0 ? 'This data source has no reports to show.' : 'Try changing the search, category or review filter.'}</Text></View>}
           {visible.map(report => <View key={report.id} style={s.card}>
             <Pressable accessibilityRole="button" accessibilityState={{ expanded: selected === report.id }} onPress={() => setSelected(selected === report.id ? null : report.id)}>
               <Text style={s.category}>{display(report.category)}  {selected === report.id ? '▲' : '▼'}</Text>
@@ -101,6 +122,7 @@ const s = StyleSheet.create({
   count: { color: '#64748b', fontSize: 12 },
   filters: { backgroundColor: '#fff', borderRadius: 18, padding: 16, gap: 12 },
   filterLabel: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
+  filterSubheading: { color: '#475569', fontSize: 12, fontWeight: '800' },
   input: { borderWidth: 1, borderColor: '#cbd5e1', padding: 12, borderRadius: 12, color: '#0f172a' },
   options: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   option: { backgroundColor: '#e2e8f0', paddingHorizontal: 10, paddingVertical: 9, borderRadius: 10 },
