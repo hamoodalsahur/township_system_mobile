@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import MapView, { Marker } from 'react-native-maps';
+import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
+import { BBR_ROADS, BBR_ROAD_SOURCE_COUNT } from '@/data/bbr-roads.generated';
+import { visibleRoads, ROAD_STYLES } from '@/lib/mobile-roads';
 import { useDataSettings } from '@/context/data-settings';
 import { loadPublicReports, type PublicReport } from '@/lib/public-reports';
 
@@ -31,9 +33,14 @@ function validCoordinate(r: PublicReport): boolean {
     r.longitude >= 101.40 && r.longitude <= 101.47;
 }
 
+const DEFAULT_REGION: Region = { latitude: 3.087, longitude: 101.433, latitudeDelta: 0.025, longitudeDelta: 0.025 };
+
 export default function MapScreen() {
   const { mode, backendUrl } = useDataSettings();
   const [backendReports, setBackendReports] = useState<MapReport[]>([]);
+  const [region, setRegion] = useState<Region>(DEFAULT_REGION);
+  const [showRoads, setShowRoads] = useState(true);
+  const roadsOnScreen = useMemo(() => showRoads ? visibleRoads(BBR_ROADS, region) : [], [region, showRoads]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [refreshVersion, setRefreshVersion] = useState(0);
@@ -81,15 +88,18 @@ export default function MapScreen() {
       <View style={s.mapFrame}>
         <MapView
           style={s.map}
-          initialRegion={{
-            latitude: 3.087,
-            longitude: 101.433,
-            latitudeDelta: 0.025,
-            longitudeDelta: 0.025,
-          }}
+          initialRegion={DEFAULT_REGION}
+          onRegionChangeComplete={setRegion}
           showsUserLocation={false}
           showsMyLocationButton={false}
         >
+          {roadsOnScreen.map(road => <Polyline
+            key={road.id}
+            coordinates={road.coordinates.map(([latitude, longitude]) => ({ latitude, longitude }))}
+            strokeColor={ROAD_STYLES[road.category].color}
+            strokeWidth={ROAD_STYLES[road.category].width}
+            geodesic={false}
+          />)}
           {reports.map(report => (
             <Marker
               key={report.id}
@@ -104,6 +114,18 @@ export default function MapScreen() {
         <View style={s.mapBadge} pointerEvents="none">
           <Text style={s.mapBadgeText}>FICTIONAL REPORTS ONLY</Text>
         </View>
+      </View>
+
+      <View style={s.roadPanel}>
+        <Text style={s.cardTitle}>BBR reference road overlay</Text>
+        <Text style={s.body}>{BBR_ROAD_SOURCE_COUNT === 0
+          ? 'Local road geometry has not been prepared on this device. The native map and fictional markers still work normally.'
+          : BBR_ROAD_SOURCE_COUNT + ' imported OSM reference features. Showing up to 180 nearby road features to keep the map responsive.'}</Text>
+        {BBR_ROAD_SOURCE_COUNT > 0 && <Pressable accessibilityRole="button" onPress={() => setShowRoads(value => !value)} style={s.refresh}>
+          <Text style={s.refreshText}>{showRoads ? 'Hide blue roads' : 'Show blue roads'}</Text>
+        </Pressable>}
+        <Text style={s.legend}>━━━━ Major   ━━━━ Local   ━━━━ Service   ━━━━ Other</Text>
+        <Text style={s.notice}>OpenStreetMap contributors © · ODbL · Reference geometry only. No road-access, closure or navigation claims.</Text>
       </View>
 
       {mode === 'local' && <Pressable accessibilityRole="button" onPress={refresh} style={s.refresh}><Text style={s.refreshText}>Refresh map reports</Text></Pressable>}
@@ -129,7 +151,7 @@ export default function MapScreen() {
         </View>
       ) : null}
 
-      <Text style={s.notice}>Academic prototype only. No real incidents, reliable live road status, verified closures, emergency reporting, or navigation advice. The original blue road overlay will be added after iPhone performance testing.</Text>
+      <Text style={s.notice}>Academic prototype only. No real incidents, reliable live road status, verified closures, emergency reporting, or navigation advice. Blue OSM overlays are geographic reference only and must not be used for travel.</Text>
     </ScrollView>
   );
 }
@@ -151,5 +173,7 @@ const s = StyleSheet.create({
   notice: { fontSize: 12, lineHeight: 19, color: '#64748b' },
   refresh: { padding: 13, backgroundColor: '#0f766e', borderRadius: 12, alignItems: 'center', alignSelf: 'flex-start' },
   refreshText: { color: '#fff', fontWeight: '800' },
-  errorTitle: { color: '#9a3412', fontSize: 15, fontWeight: '800' }
+  errorTitle: { color: '#9a3412', fontSize: 15, fontWeight: '800' },
+  roadPanel: { backgroundColor: '#fff', borderRadius: 18, padding: 20, gap: 10 },
+  legend: { color: '#2563eb', fontSize: 12, fontWeight: '700' }
 });
