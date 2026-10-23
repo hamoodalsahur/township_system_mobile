@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useDemoLocation, validDemoLocation } from '@/context/demo-location';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
@@ -37,6 +38,7 @@ function validCoordinate(r: PublicReport): boolean {
 const DEFAULT_REGION: Region = { latitude: 3.087, longitude: 101.433, latitudeDelta: 0.025, longitudeDelta: 0.025 };
 
 export default function MapScreen() {
+  const insets = useSafeAreaInsets();
   const { mode, backendUrl } = useDataSettings();
   const { chosenLocation, chooseLocation } = useDemoLocation();
   const router = useRouter();
@@ -86,7 +88,7 @@ export default function MapScreen() {
   const selected = reports.find(report => report.id === selectedId);
 
   return (
-    <ScrollView style={s.page} contentContainerStyle={s.content}>
+    <ScrollView style={s.page} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]}>
       <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · SAMPLE MARKERS' : 'LOCAL BACKEND · FICTIONAL REPORTS'}</Text>
       <Text style={s.title}>Township Map</Text>
       <Text style={s.subtitle}>Bandar Bukit Raja · Academic prototype</Text>
