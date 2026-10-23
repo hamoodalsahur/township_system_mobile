@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { useDemoLocation, validDemoLocation } from '@/context/demo-location';
 import MapView, { Marker, Polyline, type Region } from 'react-native-maps';
 import { BBR_ROADS, BBR_ROAD_SOURCE_COUNT } from '@/data/bbr-roads.generated';
 import { visibleRoads, ROAD_STYLES } from '@/lib/mobile-roads';
@@ -37,6 +38,10 @@ const DEFAULT_REGION: Region = { latitude: 3.087, longitude: 101.433, latitudeDe
 
 export default function MapScreen() {
   const { mode, backendUrl } = useDataSettings();
+  const { chosenLocation, chooseLocation } = useDemoLocation();
+  const router = useRouter();
+  const [choosingLocation, setChoosingLocation] = useState(false);
+  const [locationHint, setLocationHint] = useState('');
   const [backendReports, setBackendReports] = useState<MapReport[]>([]);
   const [region, setRegion] = useState<Region>(DEFAULT_REGION);
   const [showRoads, setShowRoads] = useState(true);
@@ -90,6 +95,17 @@ export default function MapScreen() {
           style={s.map}
           initialRegion={DEFAULT_REGION}
           onRegionChangeComplete={setRegion}
+          onPress={event => {
+            if (!choosingLocation) return;
+            const point = event.nativeEvent.coordinate;
+            if (!validDemoLocation(point)) {
+              setLocationHint('Please tap inside the fictional reporting rectangle: longitude 101.40–101.47, latitude 3.06–3.11.');
+              return;
+            }
+            chooseLocation({ latitude: point.latitude, longitude: point.longitude });
+            setLocationHint('Example location selected. You can now open Submit.');
+            setChoosingLocation(false);
+          }}
           showsUserLocation={false}
           showsMyLocationButton={false}
         >
@@ -100,6 +116,12 @@ export default function MapScreen() {
             strokeWidth={ROAD_STYLES[road.category].width}
             geodesic={false}
           />)}
+          {chosenLocation && <Marker
+            coordinate={chosenLocation}
+            pinColor="#7c3aed"
+            title="Example submission location"
+            description="Selected for a fictional report only"
+          />}
           {reports.map(report => (
             <Marker
               key={report.id}
@@ -116,6 +138,20 @@ export default function MapScreen() {
         </View>
       </View>
 
+      <View style={s.locationPanel}>
+        <Text style={s.cardTitle}>Choose an illustrative report location</Text>
+        <Text style={s.body}>Tap an empty part of the map to choose a fictional report point. Only the backend's research rectangle is accepted. This does not use phone GPS.</Text>
+        <Pressable accessibilityRole="button" onPress={() => { setChoosingLocation(v => !v); setLocationHint(''); }} style={[s.refresh, choosingLocation && s.locationActive]}>
+          <Text style={s.refreshText}>{choosingLocation ? 'Cancel picking' : 'Choose point on map'}</Text>
+        </Pressable>
+        {choosingLocation && <Text style={s.locationHint}>Selection mode is active. Tap the map where you want to place the fictional report.</Text>}
+        {locationHint ? <Text style={s.locationHint}>{locationHint}</Text> : null}
+        {chosenLocation && <View style={s.chosen}>
+          <Text style={s.detail}>Chosen demo point: {chosenLocation.latitude.toFixed(5)}, {chosenLocation.longitude.toFixed(5)}</Text>
+          <Pressable accessibilityRole="button" onPress={() => router.navigate('/submit')} style={s.refresh}><Text style={s.refreshText}>Use in Submit</Text></Pressable>
+          <Pressable accessibilityRole="button" onPress={() => { chooseLocation(null); setLocationHint(''); }}><Text style={s.detail}>Clear chosen point</Text></Pressable>
+        </View>}
+      </View>
       <View style={s.roadPanel}>
         <Text style={s.cardTitle}>BBR reference road overlay</Text>
         <Text style={s.body}>{BBR_ROAD_SOURCE_COUNT === 0
@@ -175,5 +211,9 @@ const s = StyleSheet.create({
   refreshText: { color: '#fff', fontWeight: '800' },
   errorTitle: { color: '#9a3412', fontSize: 15, fontWeight: '800' },
   roadPanel: { backgroundColor: '#fff', borderRadius: 18, padding: 20, gap: 10 },
+  locationPanel: { backgroundColor: '#fff', borderRadius: 18, padding: 20, gap: 12 },
+  locationActive: { backgroundColor: '#7c3aed' },
+  locationHint: { color: '#6d28d9', fontSize: 12, lineHeight: 19 },
+  chosen: { gap: 11 },
   legend: { color: '#2563eb', fontSize: 12, fontWeight: '700' }
 });

@@ -1,7 +1,8 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useDataSettings } from '@/context/data-settings';
 import { normalizePrivateLanUrl } from '@/lib/public-reports';
+import { useDemoLocation, validDemoLocation } from '@/context/demo-location';
 
 const CATEGORIES = [
   ['flooding', 'Flooding'], ['roadworks', 'Roadworks'],
@@ -22,9 +23,14 @@ type Impact = typeof IMPACTS[number][0];
 
 export default function SubmitScreen() {
   const { mode, backendUrl } = useDataSettings();
+  const { chosenLocation, chooseLocation } = useDemoLocation();
   const [category, setCategory] = useState<Category>('flooding');
   const [impact, setImpact] = useState<Impact>('unknown');
-  const [place, setPlace] = useState(0);
+  const [place, setPlace] = useState<number | 'map'>(0);
+  useEffect(() => {
+    if (chosenLocation) setPlace('map');
+    else setPlace(previous => previous === 'map' ? 0 : previous);
+  }, [chosenLocation]);
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const inFlight = useRef(false);
@@ -52,7 +58,11 @@ export default function SubmitScreen() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
     try {
-      const location = PLACES[place];
+      const location = place === 'map' ? chosenLocation : PLACES[place];
+      if (!location || !validDemoLocation(location)) {
+        setOutcome('Choose a valid fictional location from the map or preset options.');
+        return;
+      }
       const response = await fetch(url + '/api/v2/hazards', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,8 +106,12 @@ export default function SubmitScreen() {
         <Text style={s.label}>Suspected impact (not verified)</Text>
         <View style={s.choices}>{IMPACTS.map(([value, label]) => <Pressable key={value} onPress={() => setImpact(value)} accessibilityRole="button" accessibilityState={{ selected: impact === value }} style={[s.chip, impact === value && s.chipActive]}><Text style={[s.chipText, impact === value && s.chipTextActive]}>{label}</Text></Pressable>)}</View>
         <Text style={s.label}>Example location</Text>
-        <Text style={s.small}>Preset demonstration points only. Tap-to-place map selection comes in M3. No GPS is requested.</Text>
+        <Text style={s.small}>Choose a preset or select a fictional point in the Map tab. No GPS or personal location is requested.</Text>
+        {chosenLocation && <Pressable style={[s.location, place === 'map' && s.locationActive]} onPress={() => setPlace('map')} accessibilityRole="radio" accessibilityState={{ checked: place === 'map' }}>
+          <Text style={s.locationText}>{place === 'map' ? '◉' : '○'} Map-selected demo point ({chosenLocation.latitude.toFixed(5)}, {chosenLocation.longitude.toFixed(5)})</Text>
+        </Pressable>}
         {PLACES.map((item, i) => <Pressable key={item.label} style={[s.location, place === i && s.locationActive]} onPress={() => setPlace(i)} accessibilityRole="radio" accessibilityState={{ checked: place === i }}><Text style={s.locationText}>{place === i ? '◉' : '○'} {item.label}</Text></Pressable>)}
+        {chosenLocation && <Pressable accessibilityRole="button" onPress={() => { chooseLocation(null); setPlace(0); }}><Text style={s.small}>Clear map-selected point</Text></Pressable>}
         <Text style={s.label}>Fictional description</Text>
         <TextInput style={s.input} value={description} onChangeText={setDescription} multiline maxLength={400} textAlignVertical="top" placeholder="Describe an invented road or drainage issue…" placeholderTextColor="#94a3b8" />
         <Text style={s.small}>{description.length}/400 characters (minimum 8 non-space characters)</Text>
