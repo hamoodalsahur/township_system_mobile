@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { ActivityIndicator, Alert, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDataSettings } from '@/context/data-settings';
 import { normalizePrivateLanUrl } from '@/lib/public-reports';
+import { preparePrivateEvidence, uploadPrivateEvidence, type PrivateEvidencePhoto } from '@/lib/private-evidence';
 import { useDemoLocation, validDemoLocation } from '@/context/demo-location';
 
 const CATEGORIES = [
@@ -40,6 +43,66 @@ export default function SubmitScreen() {
   const inFlight = useRef(false);
   const [outcome, setOutcome] = useState('');
   const [successfulReportId, setSuccessfulReportId] = useState<string | null>(null);
+  const [evidence, setEvidence] = useState<PrivateEvidencePhoto | null>(null);
+  const [evidenceMessage, setEvidenceMessage] = useState('');
+  const [evidenceBusy, setEvidenceBusy] = useState(false);
+  const evidenceBusyRef = useRef(false);
+
+  async function chooseSampleImage() {
+    if (evidenceBusyRef.current || !successfulReportId || mode !== 'local') return;
+    setEvidenceMessage('');
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: false,
+        exif: false,
+        quality: 1
+      });
+      if (result.canceled || !result.assets?.[0]) return;
+      // Re-encode rather than uploading the original library file or its metadata.
+      // Try progressively smaller JPEGs, staying under the backend's 200 kB limit.
+      const image = result.assets[0];
+      for (const width of [960, 720, 480, 320]) {
+        const processed = await ImageManipulator.manipulateAsync(
+          image.uri, [{ resize: { width } }],
+          { compress: 0.45, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+        );
+        if (!processed.base64) continue;
+        try {
+          setEvidence(preparePrivateEvidence({ mimeType: 'image/jpeg', base64Data: processed.base64 }));
+          setEvidenceMessage('Sample image prepared. Upload is optional and separate from report submission.');
+          return;
+        } catch { /* Re-encode smaller if this attempt is still too large. */ }
+      }
+      setEvidence(null);
+      setEvidenceMessage('Could not reduce this sample image below 200 kB. Choose a simpler example.');
+    } catch {
+      setEvidence(null);
+      setEvidenceMessage('Image selection could not finish. The report is already saved.');
+    }
+  }
+
+  async function sendSampleEvidence() {
+    if (evidenceBusyRef.current || !evidence || !successfulReportId || mode !== 'local') return;
+    evidenceBusyRef.current = true;
+    setEvidenceBusy(true);
+    setEvidenceMessage('');
+    // Remove the image from state before sending: no automatic resubmit or retry.
+    const photo = evidence;
+    const reportId = successfulReportId;
+    setEvidence(null);
+    try {
+      const result = await uploadPrivateEvidence(backendUrl, reportId, photo);
+      setEvidenceMessage(result.status === 'uploaded'
+        ? 'Sample evidence received privately. It awaits management review and is not public.'
+        : result.message);
+    } catch (error) {
+      setEvidenceMessage(error instanceof Error ? error.message : 'Upload could not be confirmed. Check management.');
+    } finally {
+      evidenceBusyRef.current = false;
+      setEvidenceBusy(false);
+    }
+  }
 
   async function submitReport() {
     if (inFlight.current) return;
@@ -91,6 +154,8 @@ export default function SubmitScreen() {
       }
       setOutcome('Fictional report sent to management. Reference: ' + body.report.id + '. Open Reports and refresh to see its review state.');
       setSuccessfulReportId(body.report.id);
+      setEvidence(null);
+      setEvidenceMessage('');
       setDescription('');
     } catch (error) {
       setOutcome(error instanceof Error && error.name === 'AbortError'
@@ -110,7 +175,22 @@ export default function SubmitScreen() {
           <Text accessibilityRole="header" style={s.successTitle}>Report submitted successfully!</Text>
           <Text style={s.modalBody}>Your fictional report was received by management and is awaiting human review.</Text>
           <Text selectable style={s.modalReference}>Reference: {successfulReportId}</Text>
+          {mode === 'local' && (
+            <View style={s.evidenceSection}>
+              <Text style={s.evidenceTitle}>Optional fictional photo evidence</Text>
+              <Text style={s.modalBody}>Use only a non-personal sample image. It stays private until a management operator reviews it. Avoid faces, addresses and identifying details.</Text>
+              <Pressable accessibilityRole="button" disabled={evidenceBusy} style={[s.evidenceButton, evidenceBusy && s.disabled]} onPress={() => void chooseSampleImage()}>
+                <Text style={s.evidenceButtonText}>{evidence ? 'Change sample image' : 'Choose sample from library'}</Text>
+              </Pressable>
+              {evidence && <Pressable accessibilityRole="button" disabled={evidenceBusy} style={[s.button, evidenceBusy && s.disabled]} onPress={() => void sendSampleEvidence()}>
+                {evidenceBusy ? <ActivityIndicator color="#fff" /> : <Text style={s.buttonText}>Upload sample privately</Text>}
+              </Pressable>}
+              {evidenceMessage ? <Text accessibilityRole="text" style={s.evidenceMessage}>{evidenceMessage}</Text> : null}
+            </View>
+          )}
           <Pressable accessibilityRole="button" style={s.button} onPress={() => {
+            setEvidence(null);
+            setEvidenceMessage('');
             setSuccessfulReportId(null);
             setOutcome('');
             router.navigate('/reports');
@@ -118,6 +198,8 @@ export default function SubmitScreen() {
             <Text style={s.buttonText}>View Reports</Text>
           </Pressable>
           <Pressable accessibilityRole="button" style={s.modalSecondary} onPress={() => {
+            setEvidence(null);
+            setEvidenceMessage('');
             setSuccessfulReportId(null);
             setOutcome('');
             setCategory('flooding');
@@ -181,6 +263,11 @@ const s = StyleSheet.create({
   buttonText: { color: '#fff', fontWeight: '800', textAlign: 'center' },
   outcome: { color: '#0f766e', fontSize: 13, lineHeight: 21 },
   successPage: { flex: 1, backgroundColor: '#f8fafc', justifyContent: 'center', padding: 22 },
+  evidenceSection: { gap: 10, paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
+  evidenceTitle: { color: '#0f172a', fontWeight: '800', textAlign: 'center' },
+  evidenceButton: { backgroundColor: '#e2e8f0', padding: 13, borderRadius: 12, alignItems: 'center' },
+  evidenceButtonText: { color: '#0f172a', fontWeight: '700' },
+  evidenceMessage: { color: '#0f766e', fontSize: 12, lineHeight: 19, textAlign: 'center' },
   successCard: { backgroundColor: '#fff', borderRadius: 22, padding: 24, gap: 18 },
   successIcon: { textAlign: 'center', fontSize: 48, color: '#0f766e', fontWeight: '800' },
   successTitle: { textAlign: 'center', fontSize: 24, fontWeight: '800', color: '#0f172a' },
