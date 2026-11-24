@@ -29,7 +29,7 @@ You need Node.js, npm, Expo Go on your iPhone, and the [Laluan website](https://
 
 2. Scan the QR code with the iPhone camera to open the app in Expo Go.
 3. Put the phone and the laptop on the same Wi-Fi.
-4. In the app, open **Settings**, type `http://<laptop Wi-Fi IPv4>:3000` and tap **Check and save**. Find the address with `ipconfig` on Windows; `localhost` does not work from the phone. The address is remembered on the phone after that.
+4. In the app, open **Settings**, type `http://<laptop Wi-Fi IPv4>:3000` and tap **Check and save**. Find it in PowerShell with `(Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi").IPAddress`. Don't use the **Network** line that `npm run dev` prints: on Windows it can be a virtual adapter (like 192.168.112.1) the phone cannot reach. `localhost` does not work from the phone either. Campus Wi-Fi often blocks phone-to-laptop traffic; the iPhone's Personal Hotspot avoids that. The address is remembered on the phone after that.
 5. Open **Map**: it shows the laptop's service area (whatever `SERVICE_AREA` is set to), its reports and any road closures, and refreshes every minute.
 
 **Do not** reset or reseed the laptop's database or road files to run the app. The phone never needs the operator key.
