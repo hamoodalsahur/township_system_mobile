@@ -286,3 +286,69 @@ export function sentLabel(sentAt: string, now: Date = new Date()): string {
   if (days < 7) return `Sent ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][at.getDay()]}`;
   return `Sent ${at.getDate()} ${MONTHS[at.getMonth()]}`;
 }
+
+// ---------- Way home (part 3, 24 Nov 2026) ----------
+
+/**
+ * Home and the usual starting place, kept on this phone only (same shape and key as the website's
+ * browser copy). Rounded to 5 decimals, about 1 m. Sent to the laptop only inside a route check.
+ */
+export const WAY_HOME_KEY = 'laluan.wayHome.v1';
+export type WayHomeSettings = { home: LonLat; start: { kind: 'place'; at: LonLat } };
+
+const trim5 = (p: LonLat): LonLat => [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5];
+
+export function parseWayHome(raw: string | null): WayHomeSettings | null {
+  try {
+    const value: unknown = raw ? JSON.parse(raw) : null;
+    if (!isRecord(value) || !isLonLat(value.home) || !isRecord(value.start) || value.start.kind !== 'place' || !isLonLat(value.start.at)) return null;
+    return { home: [value.home[0], value.home[1]], start: { kind: 'place', at: [value.start.at[0], value.start.at[1]] } };
+  } catch { return null; }
+}
+
+export function serializeWayHome(settings: WayHomeSettings): string {
+  return JSON.stringify({ home: trim5(settings.home), start: { kind: 'place', at: trim5(settings.start.at) } });
+}
+
+export type RouteLine = { distanceM: number; durationS: number; coordinates: LonLat[] };
+export type WayHomeAnswer = {
+  status: 'clear' | 'affected' | 'blocked' | 'no_route';
+  usual: RouteLine | null; detour: RouteLine | null;
+  closures: { id: string; title: string; kindLabel: string; endsAt: string }[];
+  provider: string; checkedAt: string;
+};
+
+const isRouteLine = (v: unknown): v is RouteLine => isRecord(v) && Number.isFinite(v.distanceM) && Number.isFinite(v.durationS)
+  && Array.isArray(v.coordinates) && v.coordinates.length >= 2 && v.coordinates.every(isLonLat);
+
+/** Checks POST /api/v2/route's answer; throws the laptop's own error text when there is one. */
+export function parseRouteAnswer(body: unknown): WayHomeAnswer {
+  if (!isRecord(body)) throw new Error('The laptop sent no route.');
+  if (!['clear', 'affected', 'blocked', 'no_route'].includes(String(body.status))) throw new Error(typeof body.error === 'string' ? body.error : 'Routes are not available right now.');
+  const line = (v: unknown) => (isRouteLine(v) ? { distanceM: v.distanceM, durationS: v.durationS, coordinates: v.coordinates.map(([a, b]) => [a, b] as LonLat) } : null);
+  const closures = Array.isArray(body.closures) ? body.closures.flatMap(c => isRecord(c) && typeof c.id === 'string'
+    ? [{ id: c.id, title: String(c.title ?? 'A road'), kindLabel: String(c.kindLabel ?? 'Closed to cars'), endsAt: String(c.endsAt ?? '') }] : []) : [];
+  return { status: body.status as WayHomeAnswer['status'], usual: line(body.usual), detour: line(body.detour), closures,
+    provider: String(body.provider ?? ''), checkedAt: String(body.checkedAt ?? '') };
+}
+
+export const minutes = (seconds: number) => Math.max(1, Math.round(seconds / 60));
+export const km = (m: number) => (m < 1000 ? `${Math.round(m / 10) * 10} m` : `${(m / 1000).toFixed(1)} km`);
+export function extraTime(usualS: number, detourS: number): string {
+  const extra = Math.round(Math.max(0, detourS - usualS) / 60);
+  return extra === 0 ? 'about the same time' : `+${extra} min`;
+}
+
+/** The card's headline and detail line, word for word as on the website. */
+export function wayHomeText(answer: Pick<WayHomeAnswer, 'status' | 'usual' | 'detour' | 'closures'>): { title: string; detail: string } {
+  const first = answer.closures[0];
+  const closed = first ? `${first.title} is ${first.kindLabel === 'One lane only' ? 'down to one lane' : 'closed'}${answer.closures.length > 1 ? ` (and ${answer.closures.length - 1} more)` : ''}` : '';
+  if (answer.status === 'no_route') return { title: 'No route found', detail: 'The route service could not find a way between these points.' };
+  if (answer.status === 'clear') return { title: 'Your way home is clear', detail: answer.usual ? `${minutes(answer.usual.durationS)} min, ${km(answer.usual.distanceM)}` : '' };
+  if (answer.status === 'blocked') return { title: 'No way home found around the closure', detail: `${closed}. Try again later.` };
+  const extra = answer.detour && answer.usual ? extraTime(answer.usual.durationS, answer.detour.durationS) : '';
+  return { title: 'Your way home is affected', detail: `${closed}. Detour ${answer.detour ? `${minutes(answer.detour.durationS)} min (${extra})` : ''}` };
+}
+
+/** Changes whenever a closure starts, ends or is extended, so the way home is checked again. */
+export const closuresKey = (closures: readonly Pick<PublicClosure, 'id' | 'endsAt'>[]) => closures.map(c => `${c.id}@${c.endsAt}`).sort().join('|');

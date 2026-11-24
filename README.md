@@ -40,6 +40,7 @@ You need Node.js, npm, Expo Go on your iPhone, and the [Laluan website](https://
 2. **Report:** tap **Report a problem** on the map, tap the spot, then follow the three steps (what, where, a few words and an optional photo).
 3. **Management website:** approve the report and close the road (the Close roads window opens right after approving a "Possibly closed" report).
 4. **Phone:** the closure appears on the Map within a minute; **My reports** shows Confirmed, then Resolved after **Road cleared**.
+5. **Way home:** on the Map, tap **Set my home**, tap home, then tap where you usually set off from (like campus). The card says clear or affected and draws the detour around closures; it checks again whenever a closure starts or ends. Home and start are kept on the phone only.
 
 ## Demo acceptance checklist
 
