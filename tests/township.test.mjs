@@ -89,3 +89,12 @@ test('the app no longer carries BBR roads or BBR-only checks', () => {
   assert.doesNotMatch(readFileSync('src/app/submit.tsx', 'utf8'), /validDemoLocation|PLACES/);
   assert.match(readFileSync('src/context/data-settings.tsx', 'utf8'), /AsyncStorage\.setItem\(STORAGE_KEY, url\)/);
 });
+
+test('no Expo template look is left: Laluan name, icon and splash, no Expo-logo animation', () => {
+  const app = JSON.parse(readFileSync('app.json', 'utf8')).expo;
+  assert.equal(app.name, 'Laluan');
+  assert.equal(app.ios?.icon, undefined, 'iOS uses the Laluan icon.png');
+  const splash = app.plugins.find(p => Array.isArray(p) && p[0] === 'expo-splash-screen')[1];
+  assert.equal(splash.backgroundColor, '#0B131B');
+  assert.doesNotMatch(readFileSync('src/app/_layout.tsx', 'utf8'), /AnimatedSplashOverlay/);
+});

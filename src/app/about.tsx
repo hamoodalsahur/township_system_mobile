@@ -33,7 +33,7 @@ export default function SettingsScreen() {
     <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
       <View style={s.card}>
         <Text style={s.heading}>Your laptop</Text>
-        <Text style={s.body}>The app reads the map, reports and closures from Laluan running on your laptop. Put the phone and laptop on the same Wi-Fi, then type the laptop’s address. On Windows, run ipconfig and use the Wi-Fi IPv4 address with :3000.</Text>
+        <Text style={s.body}>The app reads the map, reports and closures from Laluan running on your laptop. Put the phone and laptop on the same Wi-Fi, then type the laptop’s address. Use the laptop’s Wi-Fi address with :3000 (in PowerShell: (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi").IPAddress), not the Network line npm run dev prints. On campus Wi-Fi, use your iPhone’s Personal Hotspot instead.</Text>
         <TextInput style={s.input} accessibilityLabel="Laptop address" value={value} onChangeText={text => { setDraft(text); setResult(null); }}
           placeholder="http://192.168.1.23:3000" placeholderTextColor={SLATE[500]} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void check()} />
         {!valid && value ? <Text style={s.hint}>Use http://, a home-network address (192.168…, 10…, 172.16–31…) and port 3000. Not localhost.</Text> : null}
