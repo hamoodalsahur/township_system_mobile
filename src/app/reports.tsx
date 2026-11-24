@@ -4,7 +4,8 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { NightHeader } from '@/components/laluan/night-header';
 import { HazardPin } from '@/components/laluan/hazard-pin';
 import { useDataSettings } from '@/context/data-settings';
-import { FONT, NIGHT, RADIUS, SLATE, TYPE } from '@/constants/night-desk';
+import { FONT, NIGHT, RADIUS, SLATE, TAB_BAR_SPACE, TYPE } from '@/constants/night-desk';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loadStatuses } from '@/lib/laptop';
 import { readMyReports } from '@/lib/my-reports-store';
 import { categoryLabel, lifecycleOf, sentLabel, statusLine, type ReportStatus, type StoredReport } from '@/lib/township';
@@ -20,6 +21,7 @@ export default function MyReportsScreen() {
   const [statuses, setStatuses] = useState<Map<string, ReportStatus> | null>(null);
   const [error, setError] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
 
   const load = useCallback(async () => {
     const list = await readMyReports();
@@ -41,7 +43,7 @@ export default function MyReportsScreen() {
     <NightHeader />
     <View style={s.night}><Text accessibilityRole="header" style={s.nightTitle}>My reports</Text>
       <Text style={s.nightSub}>What happened to the problems you reported</Text></View>
-    <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
+    <ScrollView contentContainerStyle={[s.body, { paddingBottom: insets.bottom + TAB_BAR_SPACE + 16 }]} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
       {error ? <View style={s.card}><Text style={s.cardTitle}>Progress could not be checked</Text><Text style={s.meta}>{error}</Text>
         <Pressable accessibilityRole="button" style={s.secondary} onPress={() => void load()}><Text style={s.secondaryText}>Try again</Text></Pressable></View> : null}
       {mine && mine.length === 0 ? <View style={s.card}>

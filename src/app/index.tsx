@@ -10,7 +10,8 @@ import { ClosureLines } from '@/components/laluan/closure-lines';
 import { ClosureChip, ReviewChip, SeverityChip } from '@/components/laluan/chips';
 import { RouteLines, WayHomeCard } from '@/components/laluan/way-home';
 import { useWayHome } from '@/hooks/use-way-home';
-import { FONT, GREEN, NIGHT, RADIUS, SLATE, TYPE } from '@/constants/night-desk';
+import { FONT, GREEN, NIGHT, RADIUS, SLATE, TAB_BAR_SPACE, TYPE } from '@/constants/night-desk';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { boundsOf, categoryLabel, closuresKey, isInsideArea, regionFor, reportsForMap, toLatLng, untilLabel, type LonLat } from '@/lib/township';
 
 /**
@@ -20,6 +21,7 @@ import { boundsOf, categoryLabel, closuresKey, isInsideArea, regionFor, reportsF
 export default function MapScreen() {
   const router = useRouter();
   const { height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const { area, reports, closures, loading, error, reload, backendUrl } = useTownship();
   const { chooseLocation } = useDemoLocation();
   const mapRef = useRef<MapView>(null);
@@ -108,7 +110,7 @@ export default function MapScreen() {
           <Text style={s.sheetTitle}>On the map now</Text>
           {area && !error ? <Text style={s.sheetCount}>{counts}</Text> : null}
         </View>
-        <ScrollView contentContainerStyle={s.sheetBody}>
+        <ScrollView contentContainerStyle={[s.sheetBody, { paddingBottom: insets.bottom + TAB_BAR_SPACE + 16 }]}>
           {noAddress ? <Card title="Connect to your laptop" body="Open Settings and type the laptop's address on this Wi-Fi, like http://192.168.1.23:3000. It is remembered after that."
             action="Open Settings" onAction={() => router.navigate('/about')} /> : null}
           {!noAddress && error ? <Card title="The laptop could not be reached" body={error} action="Try again" onAction={reload} /> : null}

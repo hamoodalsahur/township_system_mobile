@@ -37,3 +37,9 @@ export const TYPE = {
   small: { fontFamily: FONT.regular, fontSize: 14, lineHeight: 20 },
   caption: { fontFamily: FONT.regular, fontSize: 12, lineHeight: 16 },
 } as const;
+
+/**
+ * Room for the floating iOS tab bar (Liquid Glass) that sits over the bottom of every screen.
+ * Content and footers end above it (24 Nov 2026: the report buttons were hidden behind it).
+ */
+export const TAB_BAR_SPACE = 74;

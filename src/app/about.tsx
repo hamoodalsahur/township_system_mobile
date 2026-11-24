@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { NightHeader } from '@/components/laluan/night-header';
 import { useDataSettings } from '@/context/data-settings';
-import { FONT, GREEN, RADIUS, SLATE, TYPE } from '@/constants/night-desk';
+import { FONT, GREEN, RADIUS, SLATE, TAB_BAR_SPACE, TYPE } from '@/constants/night-desk';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { loadReports, loadServiceArea } from '@/lib/laptop';
 import { normalizePrivateLanUrl } from '@/lib/township';
 
@@ -14,6 +15,7 @@ export default function SettingsScreen() {
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
   const value = draft ?? backendUrl;
   const valid = !!normalizePrivateLanUrl(value);
+  const insets = useSafeAreaInsets();
 
   async function check() {
     if (!valid) return;
@@ -30,10 +32,10 @@ export default function SettingsScreen() {
 
   return <View style={{ flex: 1, backgroundColor: SLATE[100] }}>
     <NightHeader subtitle="Settings" />
-    <ScrollView contentContainerStyle={s.content} keyboardShouldPersistTaps="handled">
+    <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + TAB_BAR_SPACE + 16 }]} keyboardShouldPersistTaps="handled">
       <View style={s.card}>
         <Text style={s.heading}>Your laptop</Text>
-        <Text style={s.body}>The app reads the map, reports and closures from Laluan running on your laptop. Put the phone and laptop on the same Wi-Fi, then type the laptop’s address. Use the laptop’s Wi-Fi address with :3000 (in PowerShell: (Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi").IPAddress), not the Network line npm run dev prints. On campus Wi-Fi, use your iPhone’s Personal Hotspot instead.</Text>
+        <Text style={s.body}>The app reads the map, reports and closures from Laluan running on your laptop. Put the phone and laptop on the same Wi-Fi, then type the laptop’s address. Use the laptop’s Wi-Fi address with :3000 (in PowerShell: {'(Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Wi-Fi").IPAddress'}), not the Network line npm run dev prints. On campus Wi-Fi, use your iPhone’s Personal Hotspot instead.</Text>
         <TextInput style={s.input} accessibilityLabel="Laptop address" value={value} onChangeText={text => { setDraft(text); setResult(null); }}
           placeholder="http://192.168.1.23:3000" placeholderTextColor={SLATE[500]} autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="done" onSubmitEditing={() => void check()} />
         {!valid && value ? <Text style={s.hint}>Use http://, a home-network address (192.168…, 10…, 172.16–31…) and port 3000. Not localhost.</Text> : null}
