@@ -7,12 +7,7 @@ type LocationContextValue = {
 };
 const LocationContext = createContext<LocationContextValue | null>(null);
 
-// Matches the backend's local research demonstration rectangle, not an official boundary.
-export function validDemoLocation(value: DemoLocation): boolean {
-  return Number.isFinite(value.latitude) && Number.isFinite(value.longitude)
-    && value.latitude >= 3.06 && value.latitude <= 3.11
-    && value.longitude >= 101.40 && value.longitude <= 101.47;
-}
+/** The spot picked on the Map tab for a new report; already checked against the laptop's area there. */
 export function DemoLocationProvider({ children }: { children: ReactNode }) {
   const [chosenLocation, chooseLocation] = useState<DemoLocation | null>(null);
   return <LocationContext.Provider value={{ chosenLocation, chooseLocation }}>{children}</LocationContext.Provider>;

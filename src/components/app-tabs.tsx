@@ -12,14 +12,14 @@ export default function AppTabs() {
         <NativeTabs.Trigger.Icon sf="map.fill" />
       </NativeTabs.Trigger>
 
-      <NativeTabs.Trigger name="reports">
-        <NativeTabs.Trigger.Label>All reports</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="list.bullet.rectangle" />
-      </NativeTabs.Trigger>
-
       <NativeTabs.Trigger name="submit">
         <NativeTabs.Trigger.Label>Report</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="plus.circle.fill" />
+      </NativeTabs.Trigger>
+
+      <NativeTabs.Trigger name="reports">
+        <NativeTabs.Trigger.Label>My reports</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="checklist" />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="about">

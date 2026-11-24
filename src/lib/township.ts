@@ -192,3 +192,97 @@ export function parseClosures(body: unknown): PublicClosure[] {
       category: String(c.category ?? 'road_obstruction'), categoryLabel: String(c.categoryLabel ?? 'Blocked road'), title: String(c.title ?? 'Road'), roads }];
   });
 }
+
+// ---------- Reporting (part 2, 24 Nov 2026) ----------
+
+/** Same order and words as the website's report form. */
+export const REPORT_CATEGORIES = ['flooding', 'fallen_tree', 'road_obstruction', 'pothole', 'roadworks', 'storm_damage', 'other'] as const;
+export const RESIDENT_IMPACTS = [
+  { value: 'partial_obstruction', label: 'Partly blocked', hint: 'Cars can still pass, slowly' },
+  { value: 'suspected_closure', label: 'Possibly closed', hint: 'I don’t think cars can pass' },
+  { value: 'caution', label: 'Take care', hint: 'Passable, but watch out' },
+  { value: 'unknown', label: 'Not sure', hint: '' },
+] as const;
+export const DESCRIPTION_MIN = 8;
+export const DESCRIPTION_MAX = 400;
+export const descriptionOk = (text: string) => text.trim().length >= DESCRIPTION_MIN && text.length <= DESCRIPTION_MAX;
+
+export type ReportDraft = { category: string | null; impact: string | null; point: { latitude: number; longitude: number } | null; description: string };
+
+/** What is still missing before a step can move on, in the resident's words; null when it is ready. */
+export function stepProblem(step: 1 | 2 | 3, draft: ReportDraft, area: ServiceArea | null): string | null {
+  if (step === 1) return !draft.category ? 'Choose what you saw.' : !draft.impact ? 'Say whether cars can get through.' : null;
+  if (step === 2) {
+    if (!draft.point) return 'Tap the map where it is.';
+    if (area && !isInsideArea(area, draft.point.longitude, draft.point.latitude)) return `That spot is outside ${area.name}.`;
+    return null;
+  }
+  return descriptionOk(draft.description) ? null : `Write at least ${DESCRIPTION_MIN} characters.`;
+}
+
+/** The body for POST /api/v2/hazards. */
+export function submissionBody(draft: ReportDraft) {
+  if (!draft.category || !draft.impact || !draft.point) throw new Error('The report is not finished.');
+  return { category: draft.category, impact: draft.impact, description: draft.description.trim(), coordinates: [draft.point.longitude, draft.point.latitude] };
+}
+
+// ---------- My reports ----------
+
+/** Kept on the phone only: which reports this phone sent. Their progress is looked up; nothing else is sent. */
+export type StoredReport = { id: string; category: string; impact: string; sentAt: string };
+export const MY_REPORTS_LIMIT = 50;
+export const REPORT_ID_PATTERN = /^[a-z0-9]{20,40}$/;
+
+export function addStoredReport(list: readonly StoredReport[], entry: StoredReport): StoredReport[] {
+  return [entry, ...list.filter(item => item.id !== entry.id)].slice(0, MY_REPORTS_LIMIT);
+}
+
+export function parseStoredReports(raw: string | null): StoredReport[] {
+  try {
+    const value: unknown = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(value)) return [];
+    return value.filter((r): r is StoredReport => isRecord(r) && typeof r.id === 'string' && REPORT_ID_PATTERN.test(r.id)
+      && typeof r.category === 'string' && typeof r.impact === 'string' && typeof r.sentAt === 'string').slice(0, MY_REPORTS_LIMIT);
+  } catch { return []; }
+}
+
+/** Public status of one report (GET /api/v2/hazards/status): never the operator's note. */
+export type ReportStatus = { id: string; reviewState: string; incidentStatus: string | null; updatedAt: string };
+
+export function parseStatuses(body: unknown): ReportStatus[] {
+  if (!isRecord(body) || !Array.isArray(body.reports)) throw new Error('Unexpected status response.');
+  return body.reports.flatMap(r => isRecord(r) && typeof r.id === 'string' && typeof r.reviewState === 'string'
+    ? [{ id: r.id, reviewState: r.reviewState, incidentStatus: typeof r.incidentStatus === 'string' ? r.incidentStatus : null, updatedAt: String(r.updatedAt ?? '') }] : []);
+}
+
+export const LIFECYCLE_STEPS = ['Received', 'Being checked', 'Confirmed', 'Resolved'] as const;
+
+/** Which step the report is on; a rejected report stops at step 3 as "Could not confirm" (like the website). */
+export function lifecycleOf(status: ReportStatus | null | undefined): { current: number; labels: string[]; rejected: boolean } {
+  const labels: string[] = [...LIFECYCLE_STEPS];
+  if (!status) return { current: 0, labels, rejected: false };
+  if (status.reviewState === 'rejected') { labels[2] = 'Could not confirm'; return { current: 2, labels, rejected: true }; }
+  if (status.incidentStatus === 'resolved') return { current: 3, labels, rejected: false };
+  if (status.reviewState === 'corroborated') return { current: 2, labels, rejected: false };
+  return { current: 1, labels, rejected: false };
+}
+
+export function statusLine(status: ReportStatus | null | undefined): string {
+  if (!status) return 'Not found. It may have been removed from this demo.';
+  if (status.reviewState === 'rejected') return 'Could not confirm. It is not shown on the map.';
+  if (status.incidentStatus === 'resolved') return 'Resolved. The township team has closed it.';
+  if (status.reviewState === 'corroborated') return 'Confirmed. Shown on the map for everyone.';
+  return 'Being checked by the township team.';
+}
+
+/** "Sent today 16:13", "Sent yesterday", "Sent Thursday" (within a week), else "Sent 12 Nov". */
+export function sentLabel(sentAt: string, now: Date = new Date()): string {
+  const at = new Date(sentAt);
+  if (!Number.isFinite(at.getTime())) return 'Sent';
+  const startOf = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOf(now) - startOf(at)) / 86_400_000);
+  if (days <= 0) return `Sent today ${hhmm(at)}`;
+  if (days === 1) return 'Sent yesterday';
+  if (days < 7) return `Sent ${['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][at.getDay()]}`;
+  return `Sent ${at.getDate()} ${MONTHS[at.getMonth()]}`;
+}

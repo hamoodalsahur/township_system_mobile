@@ -36,12 +36,10 @@ You need Node.js, npm, Expo Go on your iPhone, and the [Laluan website](https://
 
 ## End-to-end demonstration
 
-1. **Map:** inspect BBR reference roads and fictional incident markers.
-2. **Submit:** pick a fictional incident location and category; optionally attach a non-identifying sample photo.
-3. **Management website:** review and approve/reject the demo report. Operators separately decide whether a sample image may appear to residents; approving a report alone does not publish its attached photo.
-4. **Mobile Reports / Map:** refresh to see the updated report state and any separately approved sample photo.
-
-The mobile app never needs the management operator key. That key stays with the local website/backend development setup.
+1. **Map:** your area's outline, its reports (solid = confirmed, ring = being checked) and any closed roads in red.
+2. **Report:** tap **Report a problem** on the map, tap the spot, then follow the three steps (what, where, a few words and an optional photo).
+3. **Management website:** approve the report and close the road (the Close roads window opens right after approving a "Possibly closed" report).
+4. **Phone:** the closure appears on the Map within a minute; **My reports** shows Confirmed, then Resolved after **Road cleared**.
 
 ## Demo acceptance checklist
 
