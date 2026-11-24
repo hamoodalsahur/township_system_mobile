@@ -8,8 +8,10 @@ import { NightHeader } from '@/components/laluan/night-header';
 import { HazardPin } from '@/components/laluan/hazard-pin';
 import { ClosureLines } from '@/components/laluan/closure-lines';
 import { ClosureChip, ReviewChip, SeverityChip } from '@/components/laluan/chips';
+import { RouteLines, WayHomeCard } from '@/components/laluan/way-home';
+import { useWayHome } from '@/hooks/use-way-home';
 import { FONT, GREEN, NIGHT, RADIUS, SLATE, TYPE } from '@/constants/night-desk';
-import { boundsOf, categoryLabel, isInsideArea, regionFor, reportsForMap, toLatLng, untilLabel } from '@/lib/township';
+import { boundsOf, categoryLabel, closuresKey, isInsideArea, regionFor, reportsForMap, toLatLng, untilLabel, type LonLat } from '@/lib/township';
 
 /**
  * Map (Night Desk rebuild, 24 Nov 2026): the laptop's own area, its reports and road closures,
@@ -21,7 +23,10 @@ export default function MapScreen() {
   const { area, reports, closures, loading, error, reload, backendUrl } = useTownship();
   const { chooseLocation } = useDemoLocation();
   const mapRef = useRef<MapView>(null);
-  const [picking, setPicking] = useState(false);
+  // What a tap on the map means: a report's spot, or (way home) home, then the usual starting place.
+  const [picking, setPicking] = useState<null | 'report' | 'home' | 'start'>(null);
+  const [newHome, setNewHome] = useState<LonLat | null>(null);
+  const way = useWayHome(closuresKey(closures));
   const [hint, setHint] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
@@ -47,6 +52,16 @@ export default function MapScreen() {
     if (report) mapRef.current?.animateToRegion({ latitude: report.latitude, longitude: report.longitude, latitudeDelta: 0.008, longitudeDelta: 0.008 }, 400);
   }
 
+  // Show the whole trip after each answer, below the way-home card and above the sheet.
+  const shownAt = useRef<string | null>(null);
+  useEffect(() => {
+    const answer = way.answer;
+    if (!answer || shownAt.current === answer.checkedAt) return;
+    shownAt.current = answer.checkedAt;
+    const points = [...(answer.usual?.coordinates ?? []), ...(answer.detour?.coordinates ?? [])];
+    if (points.length) mapRef.current?.fitToCoordinates(points.map(toLatLng), { edgePadding: { top: 230, right: 40, bottom: sheetHeight + 30, left: 40 }, animated: true });
+  }, [way.answer, sheetHeight]);
+
   const noAddress = !backendUrl;
   const counts = [closures.length ? `${closures.length} ${closures.length === 1 ? 'closure' : 'closures'}` : '', `${shown.length} ${shown.length === 1 ? 'report' : 'reports'}`].filter(Boolean).join(' · ');
 
@@ -57,12 +72,16 @@ export default function MapScreen() {
         onPress={event => {
           if (!picking || !area) return;
           const { latitude, longitude } = event.nativeEvent.coordinate;
+          if (picking === 'home') { setNewHome([longitude, latitude]); setPicking('start'); setHint(''); return; }
+          if (picking === 'start') { if (newHome) void way.save({ home: newHome, start: { kind: 'place', at: [longitude, latitude] } }); setPicking(null); setNewHome(null); return; }
           if (!isInsideArea(area, longitude, latitude)) { setHint(`That spot is outside ${area.name}. Tap inside the dashed line.`); return; }
           chooseLocation({ latitude, longitude });
-          setPicking(false); setHint('');
+          setPicking(null); setHint('');
           router.navigate('/submit');
         }}>
         {area ? area.rings.slice(0, 1).map((ring, i) => <Polygon key={i} coordinates={ring.map(toLatLng)} strokeColor="#475569" strokeWidth={2} lineDashPattern={[8, 6]} fillColor="rgba(255,255,255,0)" tappable={false} />) : null}
+        <RouteLines answer={picking ? null : way.answer} home={picking === 'start' ? newHome : picking ? null : way.settings?.home ?? null}
+          start={picking ? null : way.settings?.start.at ?? null} />
         <ClosureLines closures={closures} now={now} />
         {shown.map(report => <Marker key={report.id} coordinate={{ latitude: report.latitude, longitude: report.longitude }} anchor={{ x: 0.5, y: 0.5 }}
           onPress={() => focus(report.id)} zIndex={selectedId === report.id ? 9 : 8}>
@@ -71,11 +90,14 @@ export default function MapScreen() {
       </MapView>
 
       {picking ? <View style={s.pickBanner}>
-        <Text style={s.pickText}>{hint || 'Tap the map where the problem is.'}</Text>
-        <Pressable accessibilityRole="button" onPress={() => { setPicking(false); setHint(''); }} style={s.pickCancel}><Text style={s.pickCancelText}>Cancel</Text></Pressable>
+        <Text style={s.pickText}>{hint || (picking === 'home' ? 'Tap your home on the map.' : picking === 'start' ? 'Now tap where you usually set off from, like your campus.' : 'Tap the map where the problem is.')}</Text>
+        <Pressable accessibilityRole="button" onPress={() => { setPicking(null); setHint(''); setNewHome(null); }} style={s.pickCancel}><Text style={s.pickCancelText}>Cancel</Text></Pressable>
+      </View> : area ? <View style={s.wayHome}>
+        <WayHomeCard phase={way.phase} answer={way.answer} error={way.error} onCheck={way.check}
+          onSet={() => { setPicking('home'); setSelectedId(null); }} onChange={() => { setPicking('home'); setSelectedId(null); }} />
       </View> : null}
 
-      {!picking && area ? <Pressable accessibilityRole="button" onPress={() => { setPicking(true); setHint(''); setSelectedId(null); }}
+      {!picking && area ? <Pressable accessibilityRole="button" onPress={() => { setPicking('report'); setHint(''); setSelectedId(null); }}
         style={[s.reportButton, { bottom: sheetHeight + 14 }]}>
         <Text style={s.reportButtonText}>＋  Report a problem</Text>
       </Pressable> : null}
@@ -129,6 +151,7 @@ function Card({ title, body, action, onAction }: { title: string; body: string; 
 
 const s = StyleSheet.create({
   page: { flex: 1, backgroundColor: NIGHT.bar },
+  wayHome: { position: 'absolute', top: 10, left: 10, right: 10 },
   pickBanner: { position: 'absolute', top: 12, left: 12, right: 12, backgroundColor: NIGHT.band, borderRadius: RADIUS.card, padding: 14, flexDirection: 'row', alignItems: 'center', gap: 10 },
   pickText: { flex: 1, color: NIGHT.text, fontFamily: FONT.medium, fontSize: 15, lineHeight: 20 },
   pickCancel: { borderWidth: 1, borderColor: NIGHT.edge, borderRadius: RADIUS.control, paddingHorizontal: 12, paddingVertical: 9 },

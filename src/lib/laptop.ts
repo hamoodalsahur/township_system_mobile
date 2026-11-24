@@ -2,7 +2,7 @@
  * Talks to the Laluan website running on the owner's laptop (same Wi-Fi). Read-only here;
  * submitting reports stays in the report flow. Every request gives up after 8 seconds.
  */
-import { normalizePrivateLanUrl, parseClosures, parseReports, parseServiceArea, parseStatuses, type PublicClosure, type PublicReport, type ReportStatus, type ServiceArea, type submissionBody } from './township';
+import { normalizePrivateLanUrl, parseClosures, parseReports, parseRouteAnswer, parseServiceArea, parseStatuses, type LonLat, type PublicClosure, type PublicReport, type ReportStatus, type ServiceArea, type WayHomeAnswer, type submissionBody } from './township';
 
 export class LaptopError extends Error {}
 
@@ -48,5 +48,21 @@ export async function sendReport(baseUrl: string, body: ReturnType<typeof submis
     if (error instanceof LaptopError) throw error;
     if (error instanceof Error && error.name === 'AbortError') throw new LaptopError('No answer from the laptop. Check My reports before sending again.');
     throw new LaptopError('Could not reach the laptop. Nothing was sent.');
+  } finally { clearTimeout(timeout); }
+}
+
+/** Asks the laptop for the usual way and a detour around active closures. The points are not stored there. */
+export async function checkRoute(baseUrl: string, from: LonLat, to: LonLat): Promise<WayHomeAnswer> {
+  const safeUrl = normalizePrivateLanUrl(baseUrl);
+  if (!safeUrl) throw new LaptopError('Set your laptop address in Settings first.');
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(safeUrl + '/api/v2/route', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ from, to }), signal: controller.signal });
+    return parseRouteAnswer(await response.json().catch(() => null));
+  } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') throw new LaptopError('The route check took too long. Try again.');
+    if (error instanceof TypeError) throw new LaptopError('Could not reach the laptop.');
+    throw error;
   } finally { clearTimeout(timeout); }
 }
