@@ -10,7 +10,8 @@ import { HazardPin } from '@/components/laluan/hazard-pin';
 import { useDataSettings } from '@/context/data-settings';
 import { useDemoLocation } from '@/context/demo-location';
 import { useTownship } from '@/hooks/use-township';
-import { FONT, GREEN, NIGHT, RADIUS, SLATE, TYPE } from '@/constants/night-desk';
+import { FONT, GREEN, NIGHT, RADIUS, SLATE, TAB_BAR_SPACE, TYPE } from '@/constants/night-desk';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { sendReport } from '@/lib/laptop';
 import { rememberReport } from '@/lib/my-reports-store';
 import { preparePrivateEvidence, uploadPrivateEvidence, type PrivateEvidencePhoto } from '@/lib/private-evidence';
@@ -38,6 +39,8 @@ export default function ReportScreen() {
   const [photo, setPhoto] = useState<{ evidence: PrivateEvidencePhoto; uri: string } | null>(null);
   const [photoMessage, setPhotoMessage] = useState('');
   const busy = useRef(false);
+  const insets = useSafeAreaInsets();
+  const bottom = insets.bottom + TAB_BAR_SPACE; // keep buttons above the floating tab bar
 
   // A spot picked on the Map tab is used until the resident taps somewhere else here.
   const effective: ReportDraft = { ...draft, point: draft.point ?? chosenLocation };
@@ -93,7 +96,7 @@ export default function ReportScreen() {
     <NightHeader />
     <View style={s.night}><Text style={s.nightTitle}>Sent. Thank you.</Text>
       <Text style={s.nightSub}>The township team will check it. Follow what happens in My reports.</Text></View>
-    <View style={s.body}>
+    <View style={[s.body, { paddingBottom: bottom }]}>
       {sent.photo ? <Text style={s.note}>{sent.photo}</Text> : null}
       <Pressable accessibilityRole="button" style={s.primary} onPress={() => { startAgain(); router.navigate('/reports'); }}><Text style={s.primaryText}>See My reports</Text></Pressable>
       <Pressable accessibilityRole="button" style={s.secondary} onPress={startAgain}><Text style={s.secondaryText}>Report another problem</Text></Pressable>
@@ -158,7 +161,7 @@ export default function ReportScreen() {
       </>}
     </ScrollView>}
 
-    <View style={s.footer}>
+    <View style={[s.footer, { paddingBottom: bottom }]}>
       {tried && problem ? <Text accessibilityLiveRegion="polite" style={s.problem}>{problem}</Text> : null}
       {error ? <Text accessibilityLiveRegion="polite" style={s.problem}>{error}</Text> : null}
       <View style={{ flexDirection: 'row', gap: 10 }}>

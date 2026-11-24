@@ -73,3 +73,10 @@ test('screens use the shared logic; the old mock data and BBR checks are gone', 
   assert.doesNotMatch(mine + report, /mock-reports|public-reports|validDemoLocation/);
   assert.match(readFileSync('src/components/app-tabs.tsx', 'utf8'), /My reports/);
 });
+
+test('buttons and lists end above the floating tab bar on every screen', () => {
+  const report = readFileSync('src/app/submit.tsx', 'utf8');
+  assert.match(report, /const bottom = insets\.bottom \+ TAB_BAR_SPACE/);
+  assert.match(report, /<View style=\{\[s\.footer, \{ paddingBottom: bottom \}\]\}>/);
+  for (const f of ['src/app/reports.tsx', 'src/app/about.tsx', 'src/app/index.tsx']) assert.match(readFileSync(f, 'utf8'), /insets\.bottom \+ TAB_BAR_SPACE/, f);
+});
