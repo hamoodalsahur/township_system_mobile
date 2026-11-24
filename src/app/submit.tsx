@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useDataSettings } from '@/context/data-settings';
 import { normalizePrivateLanUrl } from '@/lib/public-reports';
 import { preparePrivateEvidence, uploadPrivateEvidence, type PrivateEvidencePhoto } from '@/lib/private-evidence';
-import { useDemoLocation, validDemoLocation } from '@/context/demo-location';
+import { useDemoLocation } from '@/context/demo-location';
 
 const CATEGORIES = [
   ['flooding', 'Flooding'], ['roadworks', 'Roadworks'],
@@ -17,11 +17,6 @@ const CATEGORIES = [
 const IMPACTS = [
   ['unknown', 'Unknown'], ['caution', 'Caution'],
   ['partial_obstruction', 'Partial obstruction'], ['suspected_closure', 'Suspected closure']
-] as const;
-const PLACES = [
-  { label: 'Example junction A', longitude: 101.4318, latitude: 3.0876 },
-  { label: 'Example junction B', longitude: 101.4392, latitude: 3.0891 },
-  { label: 'Example junction C', longitude: 101.4257, latitude: 3.0833 }
 ] as const;
 type Category = typeof CATEGORIES[number][0];
 type Impact = typeof IMPACTS[number][0];
@@ -119,9 +114,11 @@ export default function SubmitScreen() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 12000);
     try {
-      const location = place === 'map' ? chosenLocation : PLACES[place];
-      if (!location || !validDemoLocation(location)) {
-        setOutcome('Choose a valid fictional location from the map or preset options.');
+      // Interim (24 Nov 2026): the spot comes from the Map tab ("Report a problem", then tap the map),
+      // already checked against the laptop's service area. The 3-step report flow replaces this screen next.
+      const location = chosenLocation;
+      if (!location) {
+        setOutcome('Pick the spot first: on the Map tab, tap Report a problem, then tap the map.');
         return;
       }
       const response = await fetch(url + '/api/v2/hazards', {
@@ -227,7 +224,6 @@ export default function SubmitScreen() {
         {chosenLocation && <Pressable style={[s.location, place === 'map' && s.locationActive]} onPress={() => setPlace('map')} accessibilityRole="radio" accessibilityState={{ checked: place === 'map' }}>
           <Text style={s.locationText}>{place === 'map' ? '◉' : '○'} Map-selected demo point ({chosenLocation.latitude.toFixed(5)}, {chosenLocation.longitude.toFixed(5)})</Text>
         </Pressable>}
-        {PLACES.map((item, i) => <Pressable key={item.label} style={[s.location, place === i && s.locationActive]} onPress={() => setPlace(i)} accessibilityRole="radio" accessibilityState={{ checked: place === i }}><Text style={s.locationText}>{place === i ? '◉' : '○'} {item.label}</Text></Pressable>)}
         {chosenLocation && <Pressable accessibilityRole="button" onPress={() => { chooseLocation(null); setPlace(0); }}><Text style={s.small}>Clear map-selected point</Text></Pressable>}
         <Text style={s.label}>Fictional description</Text>
         <TextInput style={s.input} value={description} onChangeText={setDescription} multiline maxLength={400} textAlignVertical="top" placeholder="Describe an invented road or drainage issue…" placeholderTextColor="#94a3b8" />

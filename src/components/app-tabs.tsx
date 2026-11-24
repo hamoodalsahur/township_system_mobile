@@ -5,7 +5,7 @@ export default function AppTabs() {
   return (
     <NativeTabs
       backgroundColor="#ffffff"
-      tintColor="#0f766e"
+      tintColor="#0B7350"
     >
       <NativeTabs.Trigger name="index">
         <NativeTabs.Trigger.Label>Map</NativeTabs.Trigger.Label>
@@ -13,18 +13,18 @@ export default function AppTabs() {
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="reports">
-        <NativeTabs.Trigger.Label>Reports</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>All reports</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="list.bullet.rectangle" />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="submit">
-        <NativeTabs.Trigger.Label>Submit</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Report</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="plus.circle.fill" />
       </NativeTabs.Trigger>
 
       <NativeTabs.Trigger name="about">
-        <NativeTabs.Trigger.Label>About</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="info.circle.fill" />
+        <NativeTabs.Trigger.Label>Settings</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon sf="gearshape.fill" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

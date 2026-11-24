@@ -1,6 +1,9 @@
-import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
+import { DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { useFonts } from 'expo-font';
+import { Barlow_400Regular, Barlow_500Medium, Barlow_600SemiBold } from '@expo-google-fonts/barlow';
+import { BarlowSemiCondensed_600SemiBold } from '@expo-google-fonts/barlow-semi-condensed';
+import { StatusBar } from 'expo-status-bar';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
@@ -9,10 +12,13 @@ import { DemoLocationProvider } from '@/context/demo-location';
 
 SplashScreen.preventAutoHideAsync();
 
+/** Night Desk (24 Nov 2026): light screens under a navy header, Barlow everywhere. Dark mode comes later. */
 export default function TabLayout() {
-  const colorScheme = useColorScheme();
+  const [loaded, failed] = useFonts({ Barlow_400Regular, Barlow_500Medium, Barlow_600SemiBold, BarlowSemiCondensed_600SemiBold });
+  if (!loaded && !failed) return null; // the splash screen stays up meanwhile
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={DefaultTheme}>
+      <StatusBar style="light" />
       <DataSettingsProvider>
         <DemoLocationProvider>
           <AnimatedSplashOverlay />

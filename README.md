@@ -18,23 +18,21 @@ The public GitHub Pages demo runs independently. It does **not** share a live da
 
 ## Local setup
 
-You will need Node.js, npm, Expo Go on a compatible phone and the [main backend](https://github.com/hamoodalsahur/township_road_hazard_system) running locally.
+You need Node.js, npm, Expo Go on your iPhone, and the [Laluan website](https://github.com/hamoodalsahur/township_road_hazard_system) running on your laptop (`npm run dev`).
 
-1. Clone both repositories into separate folders.
-2. Follow the [main repository setup](https://github.com/hamoodalsahur/township_road_hazard_system#quick-start--website-and-backend) and start `npm run dev`; management is at `http://localhost:3000/management` on the PC.
-3. From this mobile repository run:
+1. From this repository run:
 
    ```powershell
    npm ci
    npx expo start
    ```
 
-4. Open the Expo development session on your iPhone using Expo Go.
-5. Connect your phone and computer to the same trusted Wi-Fi.
-6. In the mobile app, open **About → Local Backend**, enter `http://<PC-WIFI-IPv4>:3000` and check the connection. Find the computer's Wi-Fi IPv4 address with `ipconfig` on Windows; **do not use `localhost` on the phone**.
-7. View the **Reports** screen or submit a fictional test incident to verify connectivity.
+2. Scan the QR code with the iPhone camera to open the app in Expo Go.
+3. Put the phone and the laptop on the same Wi-Fi.
+4. In the app, open **Settings**, type `http://<laptop Wi-Fi IPv4>:3000` and tap **Check and save**. Find the address with `ipconfig` on Windows; `localhost` does not work from the phone. The address is remembered on the phone after that.
+5. Open **Map**: it shows the laptop's service area (whatever `SERVICE_AREA` is set to), its reports and any road closures, and refreshes every minute.
 
-**Do not** overwrite, reseed, or reset existing local SQLite data or road GeoJSON just to run the demo. The mobile repository does not contain the PC's private database or operator credentials.
+**Do not** reset or reseed the laptop's database or road files to run the app. The phone never needs the operator key.
 
 ## End-to-end demonstration
 
