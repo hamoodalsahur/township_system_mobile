@@ -7,9 +7,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
  */
 const STORAGE_KEY = 'laluan.laptopUrl.v1';
 
-/** Kept for the old Reports and Submit screens until they are rebuilt; the app now always reads the laptop. */
-type DataMode = 'mock' | 'local';
-type DataSettings = { backendUrl: string; setBackendUrl: (url: string) => void; ready: boolean; mode: DataMode };
+type DataSettings = { backendUrl: string; setBackendUrl: (url: string) => void; ready: boolean };
 const DataSettingsContext = createContext<DataSettings | null>(null);
 
 export function DataSettingsProvider({ children }: { children: ReactNode }) {
@@ -22,7 +20,7 @@ export function DataSettingsProvider({ children }: { children: ReactNode }) {
     setUrl(url);
     AsyncStorage.setItem(STORAGE_KEY, url).catch(() => {});
   }, []);
-  return <DataSettingsContext.Provider value={{ backendUrl, setBackendUrl, ready, mode: 'local' }}>{children}</DataSettingsContext.Provider>;
+  return <DataSettingsContext.Provider value={{ backendUrl, setBackendUrl, ready }}>{children}</DataSettingsContext.Provider>;
 }
 
 export function useDataSettings() {

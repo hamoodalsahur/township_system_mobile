@@ -1,157 +1,100 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
-import { MOCK_REPORTS } from '@/data/mock-reports';
+import { useCallback, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { NightHeader } from '@/components/laluan/night-header';
+import { HazardPin } from '@/components/laluan/hazard-pin';
 import { useDataSettings } from '@/context/data-settings';
-import { loadPublicReports, normalizePrivateLanUrl, type PublicReport } from '@/lib/public-reports';
+import { FONT, NIGHT, RADIUS, SLATE, TYPE } from '@/constants/night-desk';
+import { loadStatuses } from '@/lib/laptop';
+import { readMyReports } from '@/lib/my-reports-store';
+import { categoryLabel, lifecycleOf, sentLabel, statusLine, type ReportStatus, type StoredReport } from '@/lib/township';
 
-type DisplayReport = {
-  id: string; category: string; description: string;
-  impact: string; reviewState: string; hasApprovedPhoto?: boolean;
-};
-type StatusFilter = 'all' | 'unverified' | 'corroborated';
-type CategoryFilter = 'all' | 'flooding' | 'roadworks' | 'fallen_tree' | 'pothole' | 'road_obstruction' | 'storm_damage' | 'other';
-const categoryFilters: readonly { value: CategoryFilter; title: string }[] = [
-  { value: 'all', title: 'All categories' },
-  { value: 'flooding', title: 'Flooding' },
-  { value: 'fallen_tree', title: 'Fallen Tree' },
-  { value: 'pothole', title: 'Pothole' },
-  { value: 'roadworks', title: 'Roadworks' },
-  { value: 'road_obstruction', title: 'Road Obstruction' },
-  { value: 'storm_damage', title: 'Storm Damage' },
-  { value: 'other', title: 'Other' }
-];
-const normalizedCategory = (value: string) => value.trim().toLowerCase().replace(/[\s-]+/g, '_');
-const statusFilters: readonly { value: StatusFilter; title: string }[] = [
-  { value: 'all', title: 'All reports' },
-  { value: 'unverified', title: 'Awaiting review' },
-  { value: 'corroborated', title: 'Human reviewed' }
-];
-const display = (text: string) => text.replace(/_/g, ' ').replace(/\b\w/g, char => char.toUpperCase());
-
-export default function ReportsScreen() {
-  const insets = useSafeAreaInsets();
-  const { mode, backendUrl } = useDataSettings();
-  const [reports, setReports] = useState<PublicReport[]>([]);
-  const [loading, setLoading] = useState(false);
+/**
+ * My reports (part 2 of the phone rebuild, 24 Nov 2026): what happened to the problems sent from
+ * this phone, with the same four-step track as the website. Checked again every time the tab opens.
+ */
+export default function MyReportsScreen() {
+  const router = useRouter();
+  const { backendUrl } = useDataSettings();
+  const [mine, setMine] = useState<StoredReport[] | null>(null);
+  const [statuses, setStatuses] = useState<Map<string, ReportStatus> | null>(null);
   const [error, setError] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<StatusFilter>('all');
-  const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
-  const refresh = useCallback(() => setRefreshKey(k => k + 1), []);
-  useFocusEffect(useCallback(() => { if (mode === 'local') refresh(); }, [mode, backendUrl, refresh]));
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    setSelected(null);
-    if (mode !== 'local') {
-      setError(''); setLoading(false); setReports([]);
-      return;
-    }
-    let active = true;
-    setLoading(true); setError(''); setReports([]);
-    loadPublicReports(backendUrl).then(items => {
-      if (active) { setReports(items); setLoading(false); }
-    }).catch(reason => {
-      if (active) {
-        setError(reason instanceof Error ? reason.message : 'Unable to load fictional reports.');
-        setLoading(false);
-      }
-    });
-    return () => { active = false; };
-  }, [mode, backendUrl, refreshKey]);
+  const load = useCallback(async () => {
+    const list = await readMyReports();
+    setMine(list);
+    if (list.length === 0) { setStatuses(new Map()); return; }
+    try {
+      const found = await loadStatuses(backendUrl, list.map(r => r.id));
+      setStatuses(new Map(found.map(st => [st.id, st]))); setError('');
+    } catch (cause) { setError(cause instanceof Error ? cause.message : 'Could not reach the laptop.'); }
+  }, [backendUrl]);
 
-  const available: DisplayReport[] = mode === 'mock' ? MOCK_REPORTS : !loading && !error ? reports : [];
-  const visible = useMemo(() => available.filter(report => {
-    const statusMatch = status === 'all' || (status === 'corroborated' ? report.reviewState === 'corroborated' : report.reviewState !== 'corroborated');
-    const text = search.trim().toLowerCase();
-    const categoryMatch = categoryFilter === 'all' || normalizedCategory(report.category) === categoryFilter;
-    return statusMatch && categoryMatch && (!text || [report.category, report.description, report.id, report.impact].some(value => value.toLowerCase().includes(text)));
-  }), [available, status, categoryFilter, search]);
+  useFocusEffect(useCallback(() => {
+    void load();
+    const timer = setInterval(() => void load(), 60_000);
+    return () => clearInterval(timer);
+  }, [load]));
 
-  return (
-    <ScrollView style={s.page} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} keyboardShouldPersistTaps="handled">
-      <Text style={s.eyebrow}>{mode === 'mock' ? 'MOCK DEMO · SAMPLE DATA' : 'LOCAL BACKEND · FICTIONAL REPORTS'}</Text>
-      <Text style={s.title}>Community Reports</Text>
-      <Text style={s.subtitle}>Explore fictional scenarios. These are not verified road conditions or closures.</Text>
-      {mode === 'local' && <Pressable onPress={refresh} accessibilityRole="button" style={s.refresh}><Text style={s.refreshText}>Refresh reports</Text></Pressable>}
-
-      <View style={s.filters}>
-        <Text style={s.filterLabel}>Find a fictional report</Text>
-        <TextInput accessibilityLabel="Search report descriptions and categories" value={search} onChangeText={setSearch} placeholder="Search category, ID or description" autoCorrect={false} style={s.input} placeholderTextColor="#94a3b8" />
-        <Text style={s.filterSubheading}>Report category</Text>
-        <View style={s.options}>{categoryFilters.map(option => (
-          <Pressable key={option.value} accessibilityRole="button" accessibilityState={{ selected: categoryFilter === option.value }} onPress={() => setCategoryFilter(option.value)} style={[s.option, categoryFilter === option.value && s.active]}>
-            <Text style={[s.optionText, categoryFilter === option.value && s.activeText]}>{option.title}</Text>
-          </Pressable>
-        ))}</View>
-        <Text style={s.filterSubheading}>Review status</Text>
-        <View style={s.options}>{statusFilters.map(option => (
-          <Pressable key={option.value} accessibilityRole="button" accessibilityState={{ selected: status === option.value }} onPress={() => setStatus(option.value)} style={[s.option, status === option.value && s.active]}>
-            <Text style={[s.optionText, status === option.value && s.activeText]}>{option.title}</Text>
-          </Pressable>
-        ))}</View>
-      </View>
-
-      {loading && mode === 'local' ? <View style={s.card}><ActivityIndicator color="#0f766e"/><Text style={s.detail}>Loading fictional reports…</Text></View> : null}
-      {error && mode === 'local' ? <View style={s.errorCard}><Text style={s.errorTitle}>Could not load reports</Text><Text style={s.detail}>{error}</Text><Text style={s.detail}>No previously loaded reports are shown as current. Check the PC connection under About.</Text><Pressable accessibilityRole="button" onPress={refresh} style={s.retry}><Text style={s.retryText}>Retry loading</Text></Pressable></View> : null}
-
-      {!loading && !error ? (
-        <>
-          <Text style={s.count}>Showing {visible.length} of {available.length} fictional reports</Text>
-          {visible.length === 0 && <View style={s.card}><Text style={s.category}>{available.length === 0 ? 'No fictional reports yet' : 'No matching reports'}</Text><Text style={s.detail}>{available.length === 0 ? 'This data source has no reports to show.' : 'Try changing the search, category or review filter.'}</Text></View>}
-          {visible.map(report => <View key={report.id} style={s.card}>
-            <Pressable accessibilityRole="button" accessibilityState={{ expanded: selected === report.id }} onPress={() => setSelected(selected === report.id ? null : report.id)}>
-              <Text style={s.category}>{display(report.category)}  {selected === report.id ? '▲' : '▼'}</Text>
-              <Text style={s.detail}>Suspected impact: {display(report.impact)}</Text>
-              <Text style={s.status}>{report.reviewState === 'corroborated' ? 'Human-reviewed fictional report' : 'Not corroborated · Fictional report'}</Text>
-            </Pressable>
-            {selected === report.id ? <View style={s.expanded}>
-              <Text style={s.description}>{report.description}</Text>
-              <Text style={s.detail}>Reference: {report.id}</Text>
-              {mode === 'local' && report.hasApprovedPhoto === true && normalizePrivateLanUrl(backendUrl)
-                ? <View style={s.approvedPhoto}>
-                    <Text style={s.detail}>Management-approved fictional sample photo</Text>
-                    <Image accessibilityLabel="Approved fictional sample report photo" source={{ uri: normalizePrivateLanUrl(backendUrl)! + '/api/v2/hazards/' + encodeURIComponent(report.id) + '/evidence/approved' }} style={s.reportPhoto} resizeMode="contain" />
-                  </View>
-                : <Text style={s.detail}>{mode === 'local' ? 'No public photo approved for this fictional report.' : 'Mock example — no stored photo.'}</Text>}
-            </View> : null}
-          </View>)}
-        </>
-      ) : null}
+  return <View style={s.page}>
+    <NightHeader />
+    <View style={s.night}><Text accessibilityRole="header" style={s.nightTitle}>My reports</Text>
+      <Text style={s.nightSub}>What happened to the problems you reported</Text></View>
+    <ScrollView contentContainerStyle={s.body} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await load(); setRefreshing(false); }} />}>
+      {error ? <View style={s.card}><Text style={s.cardTitle}>Progress could not be checked</Text><Text style={s.meta}>{error}</Text>
+        <Pressable accessibilityRole="button" style={s.secondary} onPress={() => void load()}><Text style={s.secondaryText}>Try again</Text></Pressable></View> : null}
+      {mine && mine.length === 0 ? <View style={s.card}>
+        <Text style={s.cardTitle}>You haven’t sent any reports from this phone yet.</Text>
+        <Text style={s.meta}>When you report a problem, it appears here so you can follow what happens to it.</Text>
+        <Pressable accessibilityRole="button" style={s.primary} onPress={() => router.navigate('/submit')}><Text style={s.primaryText}>＋  Report a problem</Text></Pressable>
+      </View> : null}
+      {(mine ?? []).map(report => {
+        const status = statuses ? statuses.get(report.id) ?? null : undefined;
+        const track = lifecycleOf(status ?? undefined);
+        return <View key={report.id} style={s.card}>
+          <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center' }}>
+            <HazardPin category={report.category} impact={report.impact} reviewState={status?.reviewState ?? 'unverified'} size={32} />
+            <View style={{ flex: 1 }}><Text style={s.cardTitle}>{categoryLabel(report.category)}</Text><Text style={s.meta}>{sentLabel(report.sentAt)}</Text></View>
+          </View>
+          <Track current={status === undefined ? 0 : track.current} labels={track.labels} rejected={track.rejected} />
+          <Text style={[s.meta, { color: SLATE[900] }]}>{status === undefined ? 'Checking…' : statusLine(status)}</Text>
+        </View>;
+      })}
+      <Text style={s.footnote}>Kept on this phone only. Only each report’s progress is looked up; nothing else about you is sent.</Text>
     </ScrollView>
-  );
+  </View>;
 }
+
+/** Received → Being checked → Confirmed → Resolved, like the website's lifecycle track. */
+function Track({ current, labels, rejected }: { current: number; labels: string[]; rejected: boolean }) {
+  return <View accessibilityLabel={`Progress: ${labels[current]}`} style={{ flexDirection: 'row' }}>
+    {labels.map((label, i) => {
+      const done = i < current, now = i === current;
+      const colour = rejected && now ? '#8F1C13' : done || now ? (now ? '#1F5A94' : SLATE[900]) : SLATE[300];
+      return <View key={label} style={{ flex: 1, alignItems: 'flex-start', gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch' }}>
+          <View style={{ width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: colour, backgroundColor: done ? colour : '#FFFFFF' }} />
+          {i < labels.length - 1 ? <View style={{ flex: 1, height: 2, backgroundColor: done ? SLATE[900] : SLATE[200] }} /> : null}
+        </View>
+        <Text style={{ fontFamily: now ? FONT.semibold : FONT.regular, fontSize: 12, color: now ? colour : SLATE[600] }}>{label}</Text>
+      </View>;
+    })}
+  </View>;
+}
+
 const s = StyleSheet.create({
-  page: { flex: 1, backgroundColor: '#f8fafc' },
-  content: { padding: 22, paddingTop: 24, paddingBottom: 48, gap: 14 },
-  eyebrow: { fontSize: 11, fontWeight: '800', color: '#0f766e' },
-  title: { fontSize: 28, fontWeight: '800', color: '#0f172a' },
-  subtitle: { color: '#64748b', lineHeight: 20 },
-  count: { color: '#64748b', fontSize: 12 },
-  filters: { backgroundColor: '#fff', borderRadius: 18, padding: 16, gap: 12 },
-  filterLabel: { fontSize: 14, fontWeight: '800', color: '#0f172a' },
-  filterSubheading: { color: '#475569', fontSize: 12, fontWeight: '800' },
-  input: { borderWidth: 1, borderColor: '#cbd5e1', padding: 12, borderRadius: 12, color: '#0f172a' },
-  options: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  option: { backgroundColor: '#e2e8f0', paddingHorizontal: 10, paddingVertical: 9, borderRadius: 10 },
-  active: { backgroundColor: '#0f766e' },
-  optionText: { color: '#334155', fontWeight: '700', fontSize: 12 },
-  activeText: { color: '#fff' },
-  card: { backgroundColor: '#fff', padding: 18, borderRadius: 18, gap: 9, borderWidth: 1, borderColor: '#e2e8f0' },
-  category: { fontSize: 17, fontWeight: '800', color: '#0f172a' },
-  description: { color: '#334155', fontSize: 14, lineHeight: 21 },
-  approvedPhoto: { gap: 8, marginTop: 8 },
-  reportPhoto: { width: '100%', height: 180, borderRadius: 12, backgroundColor: '#f1f5f9' },
-  detail: { color: '#64748b', fontSize: 12, lineHeight: 19, marginTop: 3 },
-  status: { color: '#0f766e', fontSize: 12, fontWeight: '700', marginTop: 8 },
-  expanded: { marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#e2e8f0' },
-  refresh: { alignSelf: 'flex-start', paddingHorizontal: 17, paddingVertical: 12, backgroundColor: '#0f766e', borderRadius: 12 },
-  refreshText: { color: '#fff', fontWeight: '800' },
-  errorCard: { backgroundColor: '#fff7ed', borderRadius: 18, padding: 19, gap: 10 },
-  errorTitle: { color: '#9a3412', fontSize: 15, fontWeight: '800' },
-  retry: { backgroundColor: '#0f766e', borderRadius: 12, padding: 13, alignSelf: 'flex-start' },
-  retryText: { color: '#fff', fontWeight: '800' }
+  page: { flex: 1, backgroundColor: SLATE[100] },
+  night: { backgroundColor: NIGHT.band, paddingHorizontal: 16, paddingTop: 14, paddingBottom: 16, gap: 4 },
+  nightTitle: { ...TYPE.display, color: NIGHT.text },
+  nightSub: { ...TYPE.small, color: NIGHT.muted },
+  body: { padding: 16, gap: 12, paddingBottom: 48 },
+  card: { backgroundColor: '#FFFFFF', borderRadius: RADIUS.card, borderWidth: 1, borderColor: SLATE[200], padding: 14, gap: 12 },
+  cardTitle: { ...TYPE.heading, color: SLATE[900] },
+  meta: { ...TYPE.small, color: SLATE[600] },
+  primary: { minHeight: 50, borderRadius: RADIUS.control, backgroundColor: NIGHT.bar, alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start', paddingHorizontal: 18 },
+  primaryText: { color: '#FFFFFF', fontFamily: FONT.semibold, fontSize: 16 },
+  secondary: { minHeight: 46, borderRadius: RADIUS.control, borderWidth: 1, borderColor: SLATE[200], alignItems: 'center', justifyContent: 'center', alignSelf: 'flex-start', paddingHorizontal: 16 },
+  secondaryText: { color: SLATE[900], fontFamily: FONT.semibold, fontSize: 15 },
+  footnote: { ...TYPE.caption, color: SLATE[600] },
 });
